@@ -1,0 +1,221 @@
+﻿
+#define INV2PI	0.15915494309f
+#define INVPI2	0.63661977236f
+#define HPI		1.57079632679f
+#define PI		3.14159265358f
+#define PI2		6.28318530717f
+#define HSQRT2	0.70710678118f
+
+#pragma kernel EncinoSpectrumInit
+#pragma kernel EncinoSpectrumUpdate
+
+uint size;
+float domainSize;
+float depth;
+float gravity;
+float2 windDirection;
+float windSpeed;
+
+uint WangHash(uint seed)
+{
+	seed = (seed ^ 61) ^ (seed >> 16);
+	seed *= 9;
+	seed = seed ^ (seed >> 4);
+	seed *= 0x27d4eb2d;
+	seed = seed ^ (seed >> 15);
+	return seed;
+}
+
+uint rngState;
+
+uint Rand()
+{
+	// Xorshift algorithm from George Marsaglia's paper
+	rngState ^= (rngState << 13);
+	rngState ^= (rngState >> 17);
+	rngState ^= (rngState << 5);
+	return rngState;
+}
+
+float RandFloat()
+{
+	return Rand() / 4294967296.0f;
+}
+
+float RandGauss()
+{
+	float u1 = RandFloat();
+	float u2 = RandFloat();
+	if (u1 < 1e-6f)
+		u1 = 1e-6f;
+	return sqrt(-2.0f * log(u1)) * cos(PI2 * u2);
+}
+
+void DeepDispersion(float k, out float w, out float dwdk)
+{
+	w = sqrt(abs(gravity * k));
+	dwdk = gravity / (2.0f * w);
+}
+
+void FiniteDepthDispersion(float k, out float w, out float dwdk)
+{
+	float hk = depth * k;
+	float thk = tanh(hk);
+	w = sqrt(abs(gravity * k * thk));
+	float chk = cosh(hk);
+	dwdk = gravity * (thk + hk / (chk * chk)) / (2.0f * w);
+}
+
+void CapillaryDispersion(float k, out float w, out float dwdk)
+{
+	const float surfaceTension = 0.074f;
+	const float density = 1000.0f;
+
+	float hk = depth * k;
+	float k2s = k * k * surfaceTension / density;
+	float gpk2s = gravity * k2s;
+	float thk = tanh(hk);
+	w = sqrt(abs(k * gpk2s * thk));
+
+	float chk = cosh(hk);
+	float numer = ((gpk2s + k2s + k2s) * thk) + (hk * gpk2s / (chk * chk));
+	dwdk = numer / (2.0f * w);
+}
+
+float AlphaBetaSpectrum(float A, float B, float g, float w, float wm)
+{
+	return (A * g * g / pow(w, 5.0f)) * exp(-B * pow(wm / w, 4.0f));
+}
+
+float PiersonMoskowitzSpectrum(float w)
+{
+	float wm = 0.87f * gravity / windSpeed;
+	return AlphaBetaSpectrum(8.1e-3f, 1.291f, gravity, w, wm);
+}
+
+float PhillipsSpectrum(float w)
+{
+	float A = 2.0f;
+	float B = gravity / windSpeed;
+	return AlphaBetaSpectrum(A, B, gravity, w, 1.0f);
+}
+
+float NullDirectionalSpreading(float w, float theta, float kMag, float dTheta)
+{
+	return INV2PI;
+}
+
+float PosCosSquaredDirectionalSpreading(float w, float theta, float kMag, float dTheta)
+{
+	if (theta > -HPI && theta < HPI)
+	{
+		float ct = cos(theta);
+		return INVPI2 * (ct * ct);
+	}
+	else
+	{
+		return 0.0f;
+	}
+}
+
+float NullFilter(float k)
+{
+	return 1.0f;
+}
+
+#define Dispersion DeepDispersion
+#define Spectrum PiersonMoskowitzSpectrum
+#define Spectrum PhillipsSpectrum
+//#define DirectionalSpreading NullDirectionalSpreading
+#define DirectionalSpreading PosCosSquaredDirectionalSpreading
+#define Filter NullFilter
+
+RWTexture2D<float4> outputH0;
+RWTexture2D<float> outputOmega;
+
+[numthreads(8,8,1)]
+void EncinoSpectrumInit(uint2 id : SV_DispatchThreadID)
+{
+	int2 center = size.xx / 2;
+	int2 coord = id - center;
+	if (coord.x == 0 && coord.y == 0)
+	{
+		outputH0[id] = float4(0, 0, 0, 0);
+		outputOmega[id] = 0;
+		return;
+	}
+
+	// Find wave vector and number
+	float2 k = PI2 * coord / domainSize;
+	float kMag = length(k);
+
+	// Init seed
+	rngState = WangHash(id.y * size + id.x);
+
+	// Dispersion
+	float w; float dwdk;
+	Dispersion(kMag, w, dwdk);
+
+	// Spectrum
+	float spectrum = Spectrum(w);
+	float deltaSPos = spectrum;
+	float deltaSNeg = spectrum;
+
+	// Directional spreading
+	float dK = PI2 / domainSize;
+	float thetaPos = atan2(-k.y, k.x);
+	float thetaNeg = atan2(k.y, -k.x);
+	float dTheta = abs(atan2(dK, kMag));
+	deltaSPos *= DirectionalSpreading(w, thetaPos, kMag, dTheta);
+	deltaSNeg *= DirectionalSpreading(w, thetaNeg, kMag, dTheta);
+	deltaSPos *= (dK * dK) * dwdk / kMag;
+	deltaSNeg *= (dK * dK) * dwdk / kMag;
+
+	// Amplitude
+	float ampPos = RandGauss() * sqrt(abs(deltaSPos) * 2.0f);
+	float ampNeg = RandGauss() * sqrt(abs(deltaSNeg) * 2.0f);
+
+	// Filter
+	float filter = Filter(kMag);
+	ampPos *= filter;
+	ampNeg *= filter;
+
+	// Output
+	float phasePos = RandFloat() * PI2;
+	float phaseNeg = RandFloat() * PI2;
+	outputH0[id] = float4(
+		ampPos * float2(cos(phasePos), -sin(phasePos)),
+		ampNeg * float2(cos(phaseNeg), -sin(phaseNeg))
+	);
+	outputOmega[id] = w;
+}
+
+float time;
+
+Texture2D<float4> inputH0;
+Texture2D<float> inputOmega;
+RWTexture2D<float2> outputH;
+
+float2 cmul(float2 lhs, float2 rhs)
+{
+	return float2(
+		lhs.x * rhs.x - lhs.y * rhs.y,
+		lhs.x * rhs.y + lhs.y * rhs.x
+	);
+}
+
+[numthreads(8,8,1)]
+void EncinoSpectrumUpdate(uint2 id : SV_DispatchThreadID)
+{
+	float w = inputOmega[id];
+	float sw; float cw;
+	sincos(w * time, sw, cw);
+
+	float2 fwd = float2(cw, -sw);
+	float2 bkwd = float2(cw, sw);
+
+	float4 h0 = inputH0[id];
+	float2 h = cmul(h0.xy, fwd) + cmul(h0.zw, bkwd);
+
+	outputH[id] = h;
+}
