@@ -16,7 +16,7 @@ public class EncinoWaves : MonoBehaviour
     private int kernelFFTY = 1;
 
     private int size = 256;
-    private int meshSize = 128;
+    private int meshSize = 32;
     private float domainSize = 100.0f;
     // Initial spectrum
     private RenderTexture bufferSpectrumH0;
@@ -31,6 +31,7 @@ public class EncinoWaves : MonoBehaviour
 
     public Mesh mesh;
     public Material material;
+    public bool wireframe;
 
     void OnEnable()
     {
@@ -55,8 +56,10 @@ public class EncinoWaves : MonoBehaviour
         bufferHFinal.enableRandomWrite = true;
         bufferHFinal.Create();
         bufferHCopy = new RenderTexture(size, size, 0, RenderTextureFormat.RFloat);
+        bufferHCopy.generateMips = true;
         bufferHCopy.Create();
 
+        // Butterfly
         {
             int log2Size = Mathf.RoundToInt(Mathf.Log(size, 2));
             
@@ -109,40 +112,59 @@ public class EncinoWaves : MonoBehaviour
             texButterfly.Apply(false, true);
         }
 
+        // Mesh
         {
             mesh = new Mesh();
+            mesh.name = "EncinoMesh";
 
-            float spacing = domainSize / meshSize;
-            float offset = -0.5f * domainSize;
+            float spacing = 1.0f / meshSize;
+            var offset = new Vector3(-0.5f, 0.0f, -0.5f);
 
             var vertices = new List<Vector3>();
             var uvs = new List<Vector2>();
-            for (int y = 0; y < meshSize; y++)
+            for (int y = 0; y <= meshSize; y++)
             {
+                for (int x = 0; x <= meshSize; x++)
+                {
+                    vertices.Add(offset + new Vector3(x * spacing, 0.0f, y * spacing));
+                    uvs.Add(new Vector2((float)x / meshSize, (float)y / meshSize));
+                }
                 for (int x = 0; x < meshSize; x++)
                 {
-                    vertices.Add(new Vector3(offset + x * spacing, 0.0f, offset + y * spacing));
-                    uvs.Add(new Vector2((float)x / (meshSize - 1), (float)y / (meshSize - 1)));
+                    if (y < meshSize)
+                    {
+                        vertices.Add(offset + new Vector3((x + 0.5f) * spacing, 0.0f, (y + 0.5f) * spacing));
+                        uvs.Add(new Vector2((float)(x + 0.5f) / meshSize, (float)(y + 0.5f) / meshSize));
+                    }
                 }
             }
 
             var triangles = new List<int>();
-            for (int y = 0; y < (meshSize - 1); y++)
+            for (int y = 0; y < meshSize; y++)
             {
-                for (int x = 0; x < (meshSize - 1); x++)
+                for (int x = 0; x < meshSize; x++)
                 {
-                    var i0 = y * meshSize + x;
+                    var i0 = y * (meshSize * 2 + 1) + x;
                     var i1 = i0 + 1;
-                    var i2 = i0 + meshSize;
+                    var i2 = i0 + (meshSize * 2) + 1;
                     var i3 = i2 + 1;
+                    var ic = i0 + meshSize + 1;
+
+                    triangles.Add(i1);
+                    triangles.Add(i0);
+                    triangles.Add(ic);
+
+                    triangles.Add(i1);
+                    triangles.Add(ic);
+                    triangles.Add(i3);
+
+                    triangles.Add(ic);
+                    triangles.Add(i2);
+                    triangles.Add(i3);
 
                     triangles.Add(i0);
-                    triangles.Add(i1);
                     triangles.Add(i2);
-
-                    triangles.Add(i1);
-                    triangles.Add(i3);
-                    triangles.Add(i2);
+                    triangles.Add(ic);
                 }
             }
 
@@ -192,6 +214,16 @@ public class EncinoWaves : MonoBehaviour
         Graphics.Blit(bufferHFinal, bufferHCopy);
     }
 
+    void OnPreRender()
+    {
+        GL.wireframe = wireframe;
+    }
+
+    void OnPostRender()
+    {
+        GL.wireframe = false;
+    }
+
     void Update()
     {
         SpectrumInit();
@@ -201,15 +233,8 @@ public class EncinoWaves : MonoBehaviour
 
     void LateUpdate()
     {
-        material.SetTexture("_HeightTex", bufferHCopy);
-        Graphics.DrawMesh(mesh, Vector3.zero, Quaternion.identity, material, 0);
-    }
-
-    void OnGUI()
-    {
-        //GUI.DrawTexture(new Rect(0, 0, size, size), bufferSpectrumH0, ScaleMode.ScaleToFit, false);
-        //GUI.DrawTexture(new Rect(0, size + 1, size, size), bufferSpectrumH, ScaleMode.ScaleToFit, false);
-        GUI.DrawTexture(new Rect(size + 1, 0, size, size), bufferHCopy, ScaleMode.ScaleToFit, false);
-        //GUI.DrawTexture(new Rect(size + 1, size + 1, size, size), texButterfly, ScaleMode.ScaleToFit, false);
+        material.SetTexture("_DispTex", bufferHCopy);
+        var matrix = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(domainSize, 1, domainSize));
+        Graphics.DrawMesh(mesh, matrix, material, 0);
     }
 }

@@ -89,9 +89,9 @@ void EncinoFFT(uint2 id : SV_DispatchThreadID)
 	const bool pingpong = (PASSES % 2) == 0;
 	const float2 result = pingpong ? intermediates[coord] : scratch[coord];
 #if !FINAL
-	output[id] = result / SIZE;
+	output[id] = result;
 #else
 	const float sign = ((id.x + id.y) % 2) == 1 ? -1.0f : 1.0f;
-	output[id] = sign * result.x / SIZE;
+	output[id] = sign * result.x;
 #endif
 }

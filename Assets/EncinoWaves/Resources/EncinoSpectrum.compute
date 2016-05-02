@@ -95,7 +95,7 @@ float PiersonMoskowitzSpectrum(float w)
 
 float PhillipsSpectrum(float w)
 {
-	float A = 2.0f;
+	float A = 0.01f;
 	float B = gravity / windSpeed;
 	return AlphaBetaSpectrum(A, B, gravity, w, 1.0f);
 }
@@ -124,7 +124,7 @@ float NullFilter(float k)
 }
 
 #define Dispersion DeepDispersion
-#define Spectrum PiersonMoskowitzSpectrum
+//#define Spectrum PiersonMoskowitzSpectrum
 #define Spectrum PhillipsSpectrum
 //#define DirectionalSpreading NullDirectionalSpreading
 #define DirectionalSpreading PosCosSquaredDirectionalSpreading
