@@ -30,33 +30,40 @@
 
 		float _EdgeLength;
 
-		float4 tess(appdata v0, appdata v1, appdata v2) {
+		float4 tess(appdata v0, appdata v1, appdata v2)
+		{
 			return UnityEdgeLengthBasedTessCull(v0.vertex, v1.vertex, v2.vertex, _EdgeLength, 0.0f);
 		}
 
 		sampler2D _DispTex;
 		float _Displacement;
+		float _DomainSize;
+		float4 _SnappedWorldPosition;
 
 		void disp(inout appdata v)
 		{
-			float d = tex2Dlod(_DispTex, float4(v.texcoord.xy, 0, 0)).r * _Displacement;
+			float2 uv = _SnappedWorldPosition.xz + v.texcoord.xy;
+			float d = tex2Dlod(_DispTex, float4(uv, 0, 0)).r * _Displacement;
 			v.vertex.y += d;
 		}
 
-		struct Input {
+		struct Input
+		{
 			float2 uv_MainTex;
 		};
 
 		sampler2D _MainTex;
 		sampler2D _NormalMap;
-		fixed4 _Color;
+		float4 _Color;
 
-		void surf(Input IN, inout SurfaceOutput o) {
-			half4 c = tex2D (_MainTex, IN.uv_MainTex) * _Color;
+		void surf(Input IN, inout SurfaceOutput o)
+		{
+			float2 uv = _SnappedWorldPosition.xz + IN.uv_MainTex;
+			float4 c = tex2D(_MainTex, uv) * _Color;
 			o.Albedo = c.rgb;
 			o.Specular = 0.2;
 			o.Gloss = 1.0;
-			o.Normal = UnpackNormal(tex2D(_NormalMap, IN.uv_MainTex));
+			//o.Normal = UnpackNormal(tex2D(_NormalMap, IN.uv_MainTex));
 		}
 		ENDCG
 	}

@@ -57,6 +57,8 @@ public class EncinoWaves : MonoBehaviour
         bufferHFinal.Create();
         bufferHCopy = new RenderTexture(size, size, 0, RenderTextureFormat.RFloat);
         bufferHCopy.generateMips = true;
+        bufferHCopy.filterMode = FilterMode.Bilinear;
+        bufferHCopy.wrapMode = TextureWrapMode.Repeat;
         bufferHCopy.Create();
 
         // Butterfly
@@ -233,8 +235,15 @@ public class EncinoWaves : MonoBehaviour
 
     void LateUpdate()
     {
+        var worldPosition = transform.position;
+        var spacing = domainSize / meshSize;
+        var snappedPositionX = spacing * Mathf.FloorToInt(worldPosition.x / spacing);
+        var snappedPositionY = spacing * Mathf.FloorToInt(worldPosition.z / spacing);
+        var matrix = Matrix4x4.TRS(new Vector3(snappedPositionX, 0.0f, snappedPositionY), Quaternion.identity, new Vector3(domainSize, 1, domainSize));
+
         material.SetTexture("_DispTex", bufferHCopy);
-        var matrix = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(domainSize, 1, domainSize));
+        material.SetFloat("_DomainSize", domainSize);
+        material.SetVector("_SnappedWorldPosition", new Vector4(snappedPositionX, 0, snappedPositionY, 1) / domainSize);
         Graphics.DrawMesh(mesh, matrix, material, 0);
     }
 }
