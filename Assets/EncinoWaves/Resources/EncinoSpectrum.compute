@@ -131,7 +131,6 @@ float NullFilter(float k)
 #define Filter NullFilter
 
 RWTexture2D<float4> outputH0;
-RWTexture2D<float> outputOmega;
 
 [numthreads(8,8,1)]
 void EncinoSpectrumInit(uint2 id : SV_DispatchThreadID)
@@ -141,7 +140,6 @@ void EncinoSpectrumInit(uint2 id : SV_DispatchThreadID)
 	if (coord.x == 0 && coord.y == 0)
 	{
 		outputH0[id] = float4(0, 0, 0, 0);
-		outputOmega[id] = 0;
 		return;
 	}
 
@@ -187,13 +185,11 @@ void EncinoSpectrumInit(uint2 id : SV_DispatchThreadID)
 		ampPos * float2(cos(phasePos), -sin(phasePos)),
 		ampNeg * float2(cos(phaseNeg), -sin(phaseNeg))
 	);
-	outputOmega[id] = w;
 }
 
 float time;
 
 Texture2D<float4> inputH0;
-Texture2D<float> inputOmega;
 RWTexture2D<float2> outputH;
 
 float2 cmul(float2 lhs, float2 rhs)
@@ -207,7 +203,18 @@ float2 cmul(float2 lhs, float2 rhs)
 [numthreads(8,8,1)]
 void EncinoSpectrumUpdate(uint2 id : SV_DispatchThreadID)
 {
-	float w = inputOmega[id];
+	int2 center = size.xx / 2;
+	int2 coord = id - center;
+
+	// Find wave vector and number
+	float2 k = PI2 * coord / domainSize;
+	float kMag = length(k);
+
+	// Dispersion
+	float w; float dwdk;
+	Dispersion(kMag, w, dwdk);
+
+	// Advance time
 	float sw; float cw;
 	sincos(w * time, sw, cw);
 

@@ -20,7 +20,6 @@ public class EncinoWaves : MonoBehaviour
     private float domainSize = 100.0f;
     // Initial spectrum
     private RenderTexture bufferSpectrumH0;
-    private RenderTexture bufferSpectrumOmega;
     private RenderTexture bufferSpectrumH;
     // Final height
     private RenderTexture bufferHFinal;
@@ -44,9 +43,6 @@ public class EncinoWaves : MonoBehaviour
         bufferSpectrumH0 = new RenderTexture(size, size, 0, RenderTextureFormat.ARGBFloat);
         bufferSpectrumH0.enableRandomWrite = true;
         bufferSpectrumH0.Create();
-        bufferSpectrumOmega = new RenderTexture(size, size, 0, RenderTextureFormat.RFloat);
-        bufferSpectrumOmega.enableRandomWrite = true;
-        bufferSpectrumOmega.Create();
         bufferSpectrumH = new RenderTexture(size, size, 0, RenderTextureFormat.RGFloat);
         bufferSpectrumH.enableRandomWrite = true;
         bufferSpectrumH.Create();
@@ -187,7 +183,6 @@ public class EncinoWaves : MonoBehaviour
         shaderSpectrum.SetFloat("windSpeed", 20.0f);
 
         shaderSpectrum.SetTexture(kernelSpectrumInit, "outputH0", bufferSpectrumH0);
-        shaderSpectrum.SetTexture(kernelSpectrumInit, "outputOmega", bufferSpectrumOmega);
 
         shaderSpectrum.Dispatch(kernelSpectrumInit, size / 8, size / 8, 1);
     }
@@ -197,7 +192,6 @@ public class EncinoWaves : MonoBehaviour
         shaderSpectrum.SetFloat("time", time);
 
         shaderSpectrum.SetTexture(kernelSpectrumUpdate, "inputH0", bufferSpectrumH0);
-        shaderSpectrum.SetTexture(kernelSpectrumUpdate, "inputOmega", bufferSpectrumOmega);
         shaderSpectrum.SetTexture(kernelSpectrumUpdate, "outputH", bufferSpectrumH);
 
         shaderSpectrum.Dispatch(kernelSpectrumUpdate, size / 8, size / 8, 1);
