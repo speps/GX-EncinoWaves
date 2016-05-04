@@ -29,14 +29,14 @@
 		};
 
 		float _EdgeLength;
+		float _Displacement;
 
 		float4 tess(appdata v0, appdata v1, appdata v2)
 		{
-			return UnityEdgeLengthBasedTessCull(v0.vertex, v1.vertex, v2.vertex, _EdgeLength, 0.0f);
+			return UnityEdgeLengthBasedTessCull(v0.vertex, v1.vertex, v2.vertex, _EdgeLength, _Displacement);
 		}
 
 		sampler2D _DispTex;
-		float _Displacement;
 		float _DomainSize;
 		float4 _SnappedWorldPosition;
 

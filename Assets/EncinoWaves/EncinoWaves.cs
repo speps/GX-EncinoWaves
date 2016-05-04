@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine.Rendering;
 using System;
 
-//[ExecuteInEditMode]
+[ExecuteInEditMode]
 [RequireComponent(typeof(Camera))]
 public class EncinoWaves : MonoBehaviour
 {
@@ -21,12 +21,13 @@ public class EncinoWaves : MonoBehaviour
     // Initial spectrum
     private RenderTexture bufferSpectrumH0;
     private RenderTexture bufferSpectrumOmega;
-    // Updated spectrum
     private RenderTexture bufferSpectrumH;
     // Final height
-    private RenderTexture bufferHTemp;
     private RenderTexture bufferHFinal;
-    private RenderTexture bufferHCopy;
+
+    // FFT
+    private RenderTexture bufferFFTTemp;
+    private RenderTexture bufferFFTFinal;
     private Texture2D texButterfly;
 
     public Mesh mesh;
@@ -49,17 +50,17 @@ public class EncinoWaves : MonoBehaviour
         bufferSpectrumH = new RenderTexture(size, size, 0, RenderTextureFormat.RGFloat);
         bufferSpectrumH.enableRandomWrite = true;
         bufferSpectrumH.Create();
-        bufferHTemp = new RenderTexture(size, size, 0, RenderTextureFormat.RGFloat);
-        bufferHTemp.enableRandomWrite = true;
-        bufferHTemp.Create();
+        bufferFFTTemp = new RenderTexture(size, size, 0, RenderTextureFormat.RGFloat);
+        bufferFFTTemp.enableRandomWrite = true;
+        bufferFFTTemp.Create();
+        bufferFFTFinal = new RenderTexture(size, size, 0, RenderTextureFormat.RFloat);
+        bufferFFTFinal.enableRandomWrite = true;
+        bufferFFTFinal.Create();
         bufferHFinal = new RenderTexture(size, size, 0, RenderTextureFormat.RFloat);
-        bufferHFinal.enableRandomWrite = true;
+        bufferHFinal.generateMips = true;
+        bufferHFinal.filterMode = FilterMode.Bilinear;
+        bufferHFinal.wrapMode = TextureWrapMode.Repeat;
         bufferHFinal.Create();
-        bufferHCopy = new RenderTexture(size, size, 0, RenderTextureFormat.RFloat);
-        bufferHCopy.generateMips = true;
-        bufferHCopy.filterMode = FilterMode.Bilinear;
-        bufferHCopy.wrapMode = TextureWrapMode.Repeat;
-        bufferHCopy.Create();
 
         // Butterfly
         {
@@ -202,18 +203,18 @@ public class EncinoWaves : MonoBehaviour
         shaderSpectrum.Dispatch(kernelSpectrumUpdate, size / 8, size / 8, 1);
     }
 
-    void FFT()
+    void FFT(RenderTexture spectrum, RenderTexture output)
     {
-        shaderFFT.SetTexture(kernelFFTX, "input", bufferSpectrumH);
+        shaderFFT.SetTexture(kernelFFTX, "input", spectrum);
         shaderFFT.SetTexture(kernelFFTX, "inputButterfly", texButterfly);
-        shaderFFT.SetTexture(kernelFFTX, "output", bufferHTemp);
+        shaderFFT.SetTexture(kernelFFTX, "output", bufferFFTTemp);
         shaderFFT.Dispatch(kernelFFTX, 1, size, 1);
-        shaderFFT.SetTexture(kernelFFTY, "input", bufferHTemp);
+        shaderFFT.SetTexture(kernelFFTY, "input", bufferFFTTemp);
         shaderFFT.SetTexture(kernelFFTY, "inputButterfly", texButterfly);
-        shaderFFT.SetTexture(kernelFFTY, "output", bufferHFinal);
+        shaderFFT.SetTexture(kernelFFTY, "output", bufferFFTFinal);
         shaderFFT.Dispatch(kernelFFTY, size, 1, 1);
 
-        Graphics.Blit(bufferHFinal, bufferHCopy);
+        Graphics.Blit(bufferFFTFinal, output);
     }
 
     void OnPreRender()
@@ -230,7 +231,7 @@ public class EncinoWaves : MonoBehaviour
     {
         SpectrumInit();
         SpectrumUpdate(Time.time);
-        FFT();
+        FFT(bufferSpectrumH, bufferHFinal);
     }
 
     void LateUpdate()
@@ -241,7 +242,7 @@ public class EncinoWaves : MonoBehaviour
         var snappedPositionY = spacing * Mathf.FloorToInt(worldPosition.z / spacing);
         var matrix = Matrix4x4.TRS(new Vector3(snappedPositionX, 0.0f, snappedPositionY), Quaternion.identity, new Vector3(domainSize, 1, domainSize));
 
-        material.SetTexture("_DispTex", bufferHCopy);
+        material.SetTexture("_DispTex", bufferHFinal);
         material.SetFloat("_DomainSize", domainSize);
         material.SetVector("_SnappedWorldPosition", new Vector4(snappedPositionX, 0, snappedPositionY, 1) / domainSize);
         Graphics.DrawMesh(mesh, matrix, material, 0);
