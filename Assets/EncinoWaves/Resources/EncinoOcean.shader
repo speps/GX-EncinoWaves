@@ -3,11 +3,14 @@
 	Properties
 	{
 		_MainTex ("Base (RGB)", 2D) = "white" {}
-		_DispTex ("Disp Texture", 2D) = "gray" {}
+		_HeightTex ("Height Texture", 2D) = "black" {}
+		_DispXTex ("Disp X Texture", 2D) = "black" {}
+		_DispYTex ("Disp Y Texture", 2D) = "black" {}
 		_NormalMap ("Normalmap", 2D) = "bump" {}
 		_Color ("Color", color) = (1,1,1,0)
 		_SpecColor ("Spec color", color) = (0.5,0.5,0.5,0.5)
 		_Displacement ("Displacement", Range(0, 1.0)) = 0.3
+		_Choppiness ("Choppiness", Range(0, 10.0)) = 1
 		_EdgeLength ("Tessellation", Range(1,128)) = 4
 	}
 	SubShader
@@ -36,15 +39,23 @@
 			return UnityEdgeLengthBasedTessCull(v0.vertex, v1.vertex, v2.vertex, _EdgeLength, _Displacement);
 		}
 
-		sampler2D _DispTex;
+		sampler2D _HeightTex;
+		sampler2D _DispXTex;
+		sampler2D _DispYTex;
+		float _Choppiness;
 		float _DomainSize;
 		float4 _SnappedWorldPosition;
 
 		void disp(inout appdata v)
 		{
 			float2 uv = _SnappedWorldPosition.xz + v.texcoord.xy;
-			float d = tex2Dlod(_DispTex, float4(uv, 0, 0)).r * _Displacement;
-			v.vertex.y += d;
+			float4 d = float4(
+				tex2Dlod(_DispXTex, float4(uv, 0, 0)).r * _Choppiness,
+				tex2Dlod(_HeightTex, float4(uv, 0, 0)).r * _Displacement,
+				tex2Dlod(_DispYTex, float4(uv, 0, 0)).r * _Choppiness,
+				0
+			);
+			v.vertex += d;
 		}
 
 		struct Input

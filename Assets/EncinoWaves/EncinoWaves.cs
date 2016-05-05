@@ -17,12 +17,15 @@ public class EncinoWaves : MonoBehaviour
 
     private int size = 256;
     private int meshSize = 32;
-    private float domainSize = 100.0f;
-    // Initial spectrum
+    // Spectrum
     private RenderTexture bufferSpectrumH0;
     private RenderTexture bufferSpectrumH;
-    // Final height
+    private RenderTexture bufferSpectrumDx;
+    private RenderTexture bufferSpectrumDy;
+    // Final
     private RenderTexture bufferHFinal;
+    private RenderTexture bufferDxFinal;
+    private RenderTexture bufferDyFinal;
 
     // FFT
     private RenderTexture bufferFFTTemp;
@@ -31,7 +34,26 @@ public class EncinoWaves : MonoBehaviour
 
     public Mesh mesh;
     public Material material;
+    public float domainSize = 100.0f;
     public bool wireframe;
+
+    RenderTexture CreateSpectrumUAV()
+    {
+        var uav = new RenderTexture(size, size, 0, RenderTextureFormat.ARGBFloat);
+        uav.enableRandomWrite = true;
+        uav.Create();
+        return uav;
+    }
+
+    RenderTexture CreateFinalTexture()
+    {
+        var texture = new RenderTexture(size, size, 0, RenderTextureFormat.RFloat);
+        texture.generateMips = true;
+        texture.filterMode = FilterMode.Bilinear;
+        texture.wrapMode = TextureWrapMode.Repeat;
+        texture.Create();
+        return texture;
+    }
 
     void OnEnable()
     {
@@ -40,23 +62,23 @@ public class EncinoWaves : MonoBehaviour
         kernelSpectrumUpdate = shaderSpectrum.FindKernel("EncinoSpectrumUpdate");
         shaderFFT = (ComputeShader)Resources.Load("EncinoFFT", typeof(ComputeShader));
 
-        bufferSpectrumH0 = new RenderTexture(size, size, 0, RenderTextureFormat.ARGBFloat);
-        bufferSpectrumH0.enableRandomWrite = true;
-        bufferSpectrumH0.Create();
-        bufferSpectrumH = new RenderTexture(size, size, 0, RenderTextureFormat.RGFloat);
-        bufferSpectrumH.enableRandomWrite = true;
-        bufferSpectrumH.Create();
         bufferFFTTemp = new RenderTexture(size, size, 0, RenderTextureFormat.RGFloat);
         bufferFFTTemp.enableRandomWrite = true;
         bufferFFTTemp.Create();
         bufferFFTFinal = new RenderTexture(size, size, 0, RenderTextureFormat.RFloat);
         bufferFFTFinal.enableRandomWrite = true;
         bufferFFTFinal.Create();
-        bufferHFinal = new RenderTexture(size, size, 0, RenderTextureFormat.RFloat);
-        bufferHFinal.generateMips = true;
-        bufferHFinal.filterMode = FilterMode.Bilinear;
-        bufferHFinal.wrapMode = TextureWrapMode.Repeat;
-        bufferHFinal.Create();
+
+        bufferSpectrumH0 = new RenderTexture(size, size, 0, RenderTextureFormat.ARGBFloat);
+        bufferSpectrumH0.enableRandomWrite = true;
+        bufferSpectrumH0.Create();
+
+        bufferSpectrumH = CreateSpectrumUAV();
+        bufferSpectrumDx = CreateSpectrumUAV();
+        bufferSpectrumDy = CreateSpectrumUAV();
+        bufferHFinal = CreateFinalTexture();
+        bufferDxFinal = CreateFinalTexture();
+        bufferDyFinal = CreateFinalTexture();
 
         // Butterfly
         {
@@ -193,6 +215,8 @@ public class EncinoWaves : MonoBehaviour
 
         shaderSpectrum.SetTexture(kernelSpectrumUpdate, "inputH0", bufferSpectrumH0);
         shaderSpectrum.SetTexture(kernelSpectrumUpdate, "outputH", bufferSpectrumH);
+        shaderSpectrum.SetTexture(kernelSpectrumUpdate, "outputDx", bufferSpectrumDx);
+        shaderSpectrum.SetTexture(kernelSpectrumUpdate, "outputDy", bufferSpectrumDy);
 
         shaderSpectrum.Dispatch(kernelSpectrumUpdate, size / 8, size / 8, 1);
     }
@@ -226,6 +250,8 @@ public class EncinoWaves : MonoBehaviour
         SpectrumInit();
         SpectrumUpdate(Time.time);
         FFT(bufferSpectrumH, bufferHFinal);
+        FFT(bufferSpectrumDx, bufferDxFinal);
+        FFT(bufferSpectrumDy, bufferDyFinal);
     }
 
     void LateUpdate()
@@ -236,9 +262,16 @@ public class EncinoWaves : MonoBehaviour
         var snappedPositionY = spacing * Mathf.FloorToInt(worldPosition.z / spacing);
         var matrix = Matrix4x4.TRS(new Vector3(snappedPositionX, 0.0f, snappedPositionY), Quaternion.identity, new Vector3(domainSize, 1, domainSize));
 
-        material.SetTexture("_DispTex", bufferHFinal);
+        material.SetTexture("_HeightTex", bufferHFinal);
+        material.SetTexture("_DispXTex", bufferDxFinal);
+        material.SetTexture("_DispYTex", bufferDyFinal);
         material.SetFloat("_DomainSize", domainSize);
         material.SetVector("_SnappedWorldPosition", new Vector4(snappedPositionX, 0, snappedPositionY, 1) / domainSize);
         Graphics.DrawMesh(mesh, matrix, material, 0);
+    }
+
+    void OnGUI()
+    {
+        //GUI.DrawTexture(new Rect(0, 0, size, size), bufferDxFinal, ScaleMode.ScaleToFit, false);
     }
 }
