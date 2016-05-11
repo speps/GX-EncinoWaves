@@ -1,0 +1,77 @@
+﻿#pragma kernel EncinoCombine
+
+int size;
+float domainSize;
+float cellSize;
+float choppiness;
+
+Texture2D<float> inputH;
+Texture2D<float> inputDx;
+Texture2D<float> inputDy;
+
+RWTexture2D<float4> outputDisplacement;
+RWTexture2D<float4> outputGradientFold;
+
+#define TSIZE 8
+
+groupshared float3 displacement[TSIZE+2][TSIZE+2];
+
+void StoreDisplacement(int2 coord, float3 d)
+{
+	displacement[coord.x+1][coord.y+1] = d;
+}
+
+float3 LoadDisplacement(int2 coord)
+{
+	return displacement[coord.x+1][coord.y+1];
+}
+
+float3 SampleDisplacement(int2 coord)
+{
+	coord.x += coord.x < 0 ? size : (coord.x >= size ? -size : 0);
+	coord.y += coord.y < 0 ? size : (coord.y >= size ? -size : 0);
+	return float3(inputDx[coord], inputH[coord], inputDy[coord]);
+}
+
+[numthreads(TSIZE,TSIZE,1)]
+void EncinoCombine(uint2 id : SV_DispatchThreadID, uint2 gid : SV_GroupThreadID)
+{
+	// Displacement
+	{
+		float3 d = SampleDisplacement(id);
+		StoreDisplacement(gid, d);
+		if (gid.x == 0 && gid.y == 0)
+		{
+			[unroll]
+			for (int i = -1; i < (TSIZE+1); i++)
+			{
+				StoreDisplacement(int2(-1, i), SampleDisplacement(id + int2(-1, i)));
+				StoreDisplacement(int2(i, -1), SampleDisplacement(id + int2(i, -1)));
+				StoreDisplacement(int2(TSIZE, i), SampleDisplacement(id + int2(TSIZE, i)));
+				StoreDisplacement(int2(i, TSIZE), SampleDisplacement(id + int2(i, TSIZE)));
+			}
+		}
+		outputDisplacement[id] = float4(d, 1);
+	}
+
+	GroupMemoryBarrierWithGroupSync();
+
+	// Normal and fold
+	{
+		float3 dispL = LoadDisplacement(gid + int2(-1, 0));
+		float3 dispR = LoadDisplacement(gid + int2(+1, 0));
+		float3 dispT = LoadDisplacement(gid + int2(0, -1));
+		float3 dispB = LoadDisplacement(gid + int2(0, +1));
+
+		float3 diffH = dispR - dispL;
+		float3 diffV = dispB - dispT;
+
+		float2 Dx = diffH.xz * choppiness * cellSize;
+		float2 Dy = diffV.xz * choppiness * cellSize;
+		float J = (1.0f + Dx.x) * (1.0f + Dy.y) - Dx.y * Dy.x;
+		float fold = max(1.0f - J, 0);
+
+		outputGradientFold[id] = float4(-diffH.y, -diffV.y, 0, fold);
+		//outputGradientFold[id] = float4(dispL, 1);
+	}
+}

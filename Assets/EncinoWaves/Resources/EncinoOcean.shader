@@ -3,14 +3,9 @@
 	Properties
 	{
 		_MainTex ("Base (RGB)", 2D) = "white" {}
-		_HeightTex ("Height Texture", 2D) = "black" {}
-		_DispXTex ("Disp X Texture", 2D) = "black" {}
-		_DispYTex ("Disp Y Texture", 2D) = "black" {}
-		_NormalMap ("Normalmap", 2D) = "bump" {}
 		_Color ("Color", color) = (1,1,1,0)
 		_SpecColor ("Spec color", color) = (0.5,0.5,0.5,0.5)
 		_Displacement ("Displacement", Range(0, 1.0)) = 0.3
-		_Choppiness ("Choppiness", Range(0, 10.0)) = 1
 		_EdgeLength ("Tessellation", Range(1,128)) = 4
 	}
 	SubShader
@@ -19,8 +14,10 @@
 		LOD 300
 
 		CGPROGRAM
-		#pragma surface surf BlinnPhong addshadow fullforwardshadows vertex:disp tessellate:tess nolightmap
+		#pragma surface surf Standard addshadow fullforwardshadows vertex:vert tessellate:tess nolightmap
+		//#pragma surface surf Standard addshadow fullforwardshadows vertex:vert nolightmap
 		#pragma target 5.0
+		#pragma enable_d3d11_debug_symbols
 		#include "Tessellation.cginc"
 
 		struct appdata
@@ -33,48 +30,41 @@
 
 		float _EdgeLength;
 		float _Displacement;
+		float _Choppiness;
 
 		float4 tess(appdata v0, appdata v1, appdata v2)
 		{
-			return UnityEdgeLengthBasedTessCull(v0.vertex, v1.vertex, v2.vertex, _EdgeLength, _Displacement);
+			return UnityEdgeLengthBasedTess(v0.vertex, v1.vertex, v2.vertex, _EdgeLength);
 		}
 
-		sampler2D _HeightTex;
-		sampler2D _DispXTex;
-		sampler2D _DispYTex;
-		float _Choppiness;
-		float _DomainSize;
+		sampler2D _DispTex;
 		float4 _SnappedWorldPosition;
-
-		void disp(inout appdata v)
-		{
-			float2 uv = _SnappedWorldPosition.xz + v.texcoord.xy;
-			float4 d = float4(
-				tex2Dlod(_DispXTex, float4(uv, 0, 0)).r * _Choppiness,
-				tex2Dlod(_HeightTex, float4(uv, 0, 0)).r * _Displacement,
-				tex2Dlod(_DispYTex, float4(uv, 0, 0)).r * _Choppiness,
-				0
-			);
-			v.vertex += d;
-		}
 
 		struct Input
 		{
 			float2 uv_MainTex;
 		};
 
+		void vert(inout appdata v)
+		{
+			float2 uv = _SnappedWorldPosition.xz + v.texcoord.xy;
+			float3 displacement = tex2Dlod(_DispTex, float4(uv, 0, 0)).xyz;
+			v.vertex.xyz += displacement * float3(_Choppiness, _Displacement, _Choppiness);
+		}
+
 		sampler2D _MainTex;
 		sampler2D _NormalMap;
+		float _NormalTexelSize;
 		float4 _Color;
 
-		void surf(Input IN, inout SurfaceOutput o)
+		void surf(Input v, inout SurfaceOutputStandard o)
 		{
-			float2 uv = _SnappedWorldPosition.xz + IN.uv_MainTex;
+			float2 uv = _SnappedWorldPosition.xz + v.uv_MainTex;
 			float4 c = tex2D(_MainTex, uv) * _Color;
-			o.Albedo = c.rgb;
-			o.Specular = 0.2;
-			o.Gloss = 1.0;
-			//o.Normal = UnpackNormal(tex2D(_NormalMap, IN.uv_MainTex));
+			float4 grad = tex2D(_NormalMap, uv);
+			float3 n = normalize(float3(grad.xy, _NormalTexelSize));
+			o.Albedo = c;
+			o.Normal = n;
 		}
 		ENDCG
 	}

@@ -15,6 +15,8 @@ public class EncinoWaves : MonoBehaviour
     private int kernelFFTX = 0;
     private int kernelFFTY = 1;
 
+    private ComputeShader shaderCombine;
+
     private int size = 256;
     private int meshSize = 32;
     // Spectrum
@@ -29,12 +31,16 @@ public class EncinoWaves : MonoBehaviour
 
     // FFT
     private RenderTexture bufferFFTTemp;
-    private RenderTexture bufferFFTFinal;
     private Texture2D texButterfly;
+
+    // Combine
+    private RenderTexture bufferDisplacement;
+    private RenderTexture bufferGradientFold;
 
     public Mesh mesh;
     public Material material;
     public float domainSize = 100.0f;
+    public float choppiness = 0.03f;
     public bool wireframe;
 
     RenderTexture CreateSpectrumUAV()
@@ -48,6 +54,15 @@ public class EncinoWaves : MonoBehaviour
     RenderTexture CreateFinalTexture()
     {
         var texture = new RenderTexture(size, size, 0, RenderTextureFormat.RFloat);
+        texture.enableRandomWrite = true;
+        texture.Create();
+        return texture;
+    }
+
+    RenderTexture CreateCombinedTexture()
+    {
+        var texture = new RenderTexture(size, size, 0, RenderTextureFormat.ARGBFloat);
+        texture.enableRandomWrite = true;
         texture.generateMips = true;
         texture.filterMode = FilterMode.Bilinear;
         texture.wrapMode = TextureWrapMode.Repeat;
@@ -61,13 +76,11 @@ public class EncinoWaves : MonoBehaviour
         kernelSpectrumInit = shaderSpectrum.FindKernel("EncinoSpectrumInit");
         kernelSpectrumUpdate = shaderSpectrum.FindKernel("EncinoSpectrumUpdate");
         shaderFFT = (ComputeShader)Resources.Load("EncinoFFT", typeof(ComputeShader));
+        shaderCombine = (ComputeShader)Resources.Load("EncinoCombine", typeof(ComputeShader));
 
         bufferFFTTemp = new RenderTexture(size, size, 0, RenderTextureFormat.RGFloat);
         bufferFFTTemp.enableRandomWrite = true;
         bufferFFTTemp.Create();
-        bufferFFTFinal = new RenderTexture(size, size, 0, RenderTextureFormat.RFloat);
-        bufferFFTFinal.enableRandomWrite = true;
-        bufferFFTFinal.Create();
 
         bufferSpectrumH0 = new RenderTexture(size, size, 0, RenderTextureFormat.ARGBFloat);
         bufferSpectrumH0.enableRandomWrite = true;
@@ -79,6 +92,8 @@ public class EncinoWaves : MonoBehaviour
         bufferHFinal = CreateFinalTexture();
         bufferDxFinal = CreateFinalTexture();
         bufferDyFinal = CreateFinalTexture();
+        bufferDisplacement = CreateCombinedTexture();
+        bufferGradientFold = CreateCombinedTexture();
 
         // Butterfly
         {
@@ -193,6 +208,7 @@ public class EncinoWaves : MonoBehaviour
             mesh.uv = uvs.ToArray();
             mesh.triangles = triangles.ToArray();
             mesh.UploadMeshData(false);
+            mesh.RecalculateNormals();
         }
     }
 
@@ -229,10 +245,25 @@ public class EncinoWaves : MonoBehaviour
         shaderFFT.Dispatch(kernelFFTX, 1, size, 1);
         shaderFFT.SetTexture(kernelFFTY, "input", bufferFFTTemp);
         shaderFFT.SetTexture(kernelFFTY, "inputButterfly", texButterfly);
-        shaderFFT.SetTexture(kernelFFTY, "output", bufferFFTFinal);
+        shaderFFT.SetTexture(kernelFFTY, "output", output);
         shaderFFT.Dispatch(kernelFFTY, size, 1, 1);
+    }
 
-        Graphics.Blit(bufferFFTFinal, output);
+    void Combine()
+    {
+        shaderCombine.SetInt("size", size);
+        shaderCombine.SetFloat("domainSize", domainSize);
+        shaderCombine.SetFloat("cellSize", size / domainSize);
+        shaderCombine.SetFloat("choppiness", choppiness);
+
+        shaderCombine.SetTexture(0, "inputH", bufferHFinal);
+        shaderCombine.SetTexture(0, "inputDx", bufferDxFinal);
+        shaderCombine.SetTexture(0, "inputDy", bufferDyFinal);
+
+        shaderCombine.SetTexture(0, "outputDisplacement", bufferDisplacement);
+        shaderCombine.SetTexture(0, "outputGradientFold", bufferGradientFold);
+
+        shaderCombine.Dispatch(0, size / 8, size / 8, 1);
     }
 
     void OnPreRender()
@@ -252,6 +283,7 @@ public class EncinoWaves : MonoBehaviour
         FFT(bufferSpectrumH, bufferHFinal);
         FFT(bufferSpectrumDx, bufferDxFinal);
         FFT(bufferSpectrumDy, bufferDyFinal);
+        Combine();
     }
 
     void LateUpdate()
@@ -262,16 +294,16 @@ public class EncinoWaves : MonoBehaviour
         var snappedPositionY = spacing * Mathf.FloorToInt(worldPosition.z / spacing);
         var matrix = Matrix4x4.TRS(new Vector3(snappedPositionX, 0.0f, snappedPositionY), Quaternion.identity, new Vector3(domainSize, 1, domainSize));
 
-        material.SetTexture("_HeightTex", bufferHFinal);
-        material.SetTexture("_DispXTex", bufferDxFinal);
-        material.SetTexture("_DispYTex", bufferDyFinal);
-        material.SetFloat("_DomainSize", domainSize);
+        material.SetTexture("_DispTex", bufferDisplacement);
+        material.SetTexture("_NormalMap", bufferGradientFold);
+        material.SetFloat("_Choppiness", choppiness);
+        material.SetFloat("_NormalTexelSize", 2.0f * domainSize / size);
         material.SetVector("_SnappedWorldPosition", new Vector4(snappedPositionX, 0, snappedPositionY, 1) / domainSize);
-        Graphics.DrawMesh(mesh, matrix, material, 0);
+        Graphics.DrawMesh(mesh, matrix, material, gameObject.layer);
     }
 
     void OnGUI()
     {
-        //GUI.DrawTexture(new Rect(0, 0, size, size), bufferDxFinal, ScaleMode.ScaleToFit, false);
+        //GUI.DrawTexture(new Rect(0, 0, size*2, size*2), bufferGradientFold, ScaleMode.ScaleToFit, false);
     }
 }
