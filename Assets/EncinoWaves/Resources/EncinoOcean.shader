@@ -1,10 +1,9 @@
-﻿Shader "Custom/EncinoOcean"
+﻿Shader "Encino/EncinoOcean"
 {
 	Properties
 	{
 		_MainTex ("Base (RGB)", 2D) = "white" {}
 		_Color ("Color", color) = (1,1,1,0)
-		_SpecColor ("Spec color", color) = (0.5,0.5,0.5,0.5)
 		_Displacement ("Displacement", Range(0, 1.0)) = 0.3
 		_EdgeLength ("Tessellation", Range(1,128)) = 4
 	}

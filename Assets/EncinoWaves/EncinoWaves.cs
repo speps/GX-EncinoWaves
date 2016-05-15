@@ -15,7 +15,7 @@ public class EncinoWaves : MonoBehaviour
     private int kernelFFTX = 0;
     private int kernelFFTY = 1;
 
-    private ComputeShader shaderCombine;
+    private Material materialCombine;
 
     private int size = 256;
     private int meshSize = 32;
@@ -39,6 +39,7 @@ public class EncinoWaves : MonoBehaviour
 
     public Mesh mesh;
     public Material material;
+    public Material materialExtended;
     public float domainSize = 200.0f;
     public float choppiness = 2.0f;
     public bool wireframe;
@@ -64,6 +65,7 @@ public class EncinoWaves : MonoBehaviour
     {
         var texture = new RenderTexture(size, size, 0, RenderTextureFormat.ARGBFloat);
         texture.enableRandomWrite = true;
+        texture.useMipMap = true;
         texture.generateMips = true;
         texture.filterMode = FilterMode.Bilinear;
         texture.wrapMode = TextureWrapMode.Repeat;
@@ -77,7 +79,7 @@ public class EncinoWaves : MonoBehaviour
         kernelSpectrumInit = shaderSpectrum.FindKernel("EncinoSpectrumInit");
         kernelSpectrumUpdate = shaderSpectrum.FindKernel("EncinoSpectrumUpdate");
         shaderFFT = (ComputeShader)Resources.Load("EncinoFFT", typeof(ComputeShader));
-        shaderCombine = (ComputeShader)Resources.Load("EncinoCombine", typeof(ComputeShader));
+        materialCombine = (Material)Resources.Load("EncinoCombine", typeof(Material));
 
         bufferFFTTemp = new RenderTexture(size, size, 0, RenderTextureFormat.RGFloat);
         bufferFFTTemp.enableRandomWrite = true;
@@ -252,19 +254,69 @@ public class EncinoWaves : MonoBehaviour
 
     void Combine()
     {
-        shaderCombine.SetInt("size", size);
-        shaderCombine.SetFloat("domainSize", domainSize);
-        shaderCombine.SetFloat("invDomainSize", 1.0f / domainSize);
-        shaderCombine.SetFloat("choppiness", choppiness);
+        materialCombine.SetInt("size", size);
+        materialCombine.SetFloat("domainSize", domainSize);
+        materialCombine.SetFloat("invDomainSize", 1.0f / domainSize);
+        materialCombine.SetFloat("choppiness", choppiness);
 
-        shaderCombine.SetTexture(0, "inputH", bufferHFinal);
-        shaderCombine.SetTexture(0, "inputDx", bufferDxFinal);
-        shaderCombine.SetTexture(0, "inputDy", bufferDyFinal);
+        materialCombine.SetTexture("inputH", bufferHFinal);
+        materialCombine.SetTexture("inputDx", bufferDxFinal);
+        materialCombine.SetTexture("inputDy", bufferDyFinal);
+        
+        Graphics.SetRenderTarget(new RenderBuffer[] { bufferDisplacement.colorBuffer, bufferGradientFold.colorBuffer }, bufferDisplacement.depthBuffer);
+        GL.PushMatrix();
+        GL.LoadPixelMatrix(0, size, size, 0);
+        GL.Viewport(new Rect(0, 0, size, size));
+        materialCombine.SetPass(0);
+        GL.Begin(GL.QUADS);
+        GL.TexCoord2(0, 0);
+        GL.Vertex3(0, 0, 0);
+        GL.TexCoord2(1, 0);
+        GL.Vertex3(size, 0, 0);
+        GL.TexCoord2(1, 1);
+        GL.Vertex3(size, size, 0);
+        GL.TexCoord2(0, 1);
+        GL.Vertex3(0, size, 0);
+        GL.End();
+        GL.PopMatrix();
+        Graphics.SetRenderTarget(null);
+    }
 
-        shaderCombine.SetTexture(0, "outputDisplacement", bufferDisplacement);
-        shaderCombine.SetTexture(0, "outputGradientFold", bufferGradientFold);
+    Vector3 GetPlaneBase(Vector3 n, int index)
+    {
+        if (index == 1)
+        {
+            if (n.x == 0.0f)
+            {
+                return Vector3.right;
+            }
+            else if (n.y == 0.0f)
+            {
+                return Vector3.up;
+            }
+            else if (n.z == 0.0f)
+            {
+                return Vector3.forward;
+            }
+            return new Vector3(-n.y, n.x, 0.0f);
+        }
+        return Vector3.Cross(n, GetPlaneBase(n, 1));
+    }
 
-        shaderCombine.Dispatch(0, size / 8, size / 8, 1);
+    Vector2 To2D(Vector3 n, Vector3 p)
+    {
+        var v1 = GetPlaneBase(n, 1);
+        var v2 = GetPlaneBase(n, 2);
+        var v3 = n;
+
+        float denom = v2.y * v3.x * v1.z - v2.x * v3.y * v1.z + v3.z * v2.x * v1.y +
+               v2.z * v3.y * v1.x - v3.x * v2.z * v1.y - v2.y * v3.z * v1.x;
+        float x = -(v2.y * v3.z * p.x - v2.y * v3.x * p.z + v3.x * v2.z * p.y +
+                  v2.x * v3.y * p.z - v3.z * v2.x * p.y - v2.z * v3.y * p.x) / denom;
+        float y = (v1.y * v3.z * p.x - v1.y * v3.x * p.z - v3.y * p.x * v1.z +
+                v3.y * v1.x * p.z + p.y * v3.x * v1.z - p.y * v3.z * v1.x) / denom;
+
+        return new Vector2(x, y);
     }
 
     Vector3? GetIntersection(Vector3 planeOrigin, Vector3 planeNormal, Vector3 p0, Vector3 p1)
@@ -282,15 +334,20 @@ public class EncinoWaves : MonoBehaviour
         return p0 + u * (p1 - p0);
     }
 
-    void DrawDebug(Vector3? point, Color color)
+    void AddPoint(List<Vector3> points, Vector3? point)
     {
         if (point.HasValue)
         {
-            float size = 0.4f;
-            Debug.DrawLine(point.Value - new Vector3(size, 0.0f, 0.0f), point.Value + new Vector3(size, 0.0f, 0.0f), color);
-            Debug.DrawLine(point.Value - new Vector3(0.0f, size, 0.0f), point.Value + new Vector3(0.0f, size, 0.0f), color);
-            Debug.DrawLine(point.Value - new Vector3(0.0f, 0.0f, size), point.Value + new Vector3(0.0f, 0.0f, size), color);
+            points.Add(point.Value);
         }
+    }
+
+    void DrawDebug(Vector3 point, Color color)
+    {
+        float size = 0.4f;
+        Debug.DrawLine(point - new Vector3(size, 0.0f, 0.0f), point + new Vector3(size, 0.0f, 0.0f), color);
+        Debug.DrawLine(point - new Vector3(0.0f, size, 0.0f), point + new Vector3(0.0f, size, 0.0f), color);
+        Debug.DrawLine(point - new Vector3(0.0f, 0.0f, size), point + new Vector3(0.0f, 0.0f, size), color);
     }
 
     void ComputeExtendedPlane()
@@ -305,28 +362,99 @@ public class EncinoWaves : MonoBehaviour
         var farBL = camera.ViewportToWorldPoint(new Vector3(0, 0, camera.farClipPlane));
         var farBR = camera.ViewportToWorldPoint(new Vector3(0, 1, camera.farClipPlane));
 
-        Debug.DrawLine(nearTL, farTL);
-        Debug.DrawLine(nearTR, farTR);
-        Debug.DrawLine(nearBL, farBL);
-        Debug.DrawLine(nearBR, farBR);
+        //Debug.DrawLine(nearTL, farTL);
+        //Debug.DrawLine(nearTR, farTR);
+        //Debug.DrawLine(nearBL, farBL);
+        //Debug.DrawLine(nearBR, farBR);
 
         var planeOrigin = new Vector3(camera.transform.position.x, 0.0f, camera.transform.position.z);
         var planeNormal = Vector3.up;
 
-        DrawDebug(GetIntersection(planeOrigin, planeNormal, nearTL, farTL), Color.yellow);
-        DrawDebug(GetIntersection(planeOrigin, planeNormal, nearTR, farTR), Color.yellow);
-        DrawDebug(GetIntersection(planeOrigin, planeNormal, nearBL, farBL), Color.yellow);
-        DrawDebug(GetIntersection(planeOrigin, planeNormal, nearBR, farBR), Color.yellow);
+        var points = new List<Vector3>();
+        AddPoint(points, GetIntersection(planeOrigin, planeNormal, nearTL, farTL));
+        AddPoint(points, GetIntersection(planeOrigin, planeNormal, nearTR, farTR));
+        AddPoint(points, GetIntersection(planeOrigin, planeNormal, nearBL, farBL));
+        AddPoint(points, GetIntersection(planeOrigin, planeNormal, nearBR, farBR));
+        AddPoint(points, GetIntersection(planeOrigin, planeNormal, farTL, farTR));
+        AddPoint(points, GetIntersection(planeOrigin, planeNormal, farBL, farBR));
+        AddPoint(points, GetIntersection(planeOrigin, planeNormal, farTL, farBL));
+        AddPoint(points, GetIntersection(planeOrigin, planeNormal, farTR, farBR));
+        AddPoint(points, GetIntersection(planeOrigin, planeNormal, nearTL, nearTR));
+        AddPoint(points, GetIntersection(planeOrigin, planeNormal, nearBL, nearBR));
+        AddPoint(points, GetIntersection(planeOrigin, planeNormal, nearTL, nearBL));
+        AddPoint(points, GetIntersection(planeOrigin, planeNormal, nearTR, nearBR));
+        if (points.Count == 0)
+        {
+            return;
+        }
 
-        DrawDebug(GetIntersection(planeOrigin, planeNormal, farTL, farTR), Color.yellow);
-        DrawDebug(GetIntersection(planeOrigin, planeNormal, farBL, farBR), Color.yellow);
-        DrawDebug(GetIntersection(planeOrigin, planeNormal, farTL, farBL), Color.yellow);
-        DrawDebug(GetIntersection(planeOrigin, planeNormal, farTR, farBR), Color.yellow);
+        var center = Vector2.zero;
+        var points2D = new List<Vector2>();
+        foreach (var p in points)
+        {
+            var p2D = To2D(planeNormal, p);
+            center += p2D;
+            points2D.Add(p2D);
+        }
+        center /= points.Count;
 
-        DrawDebug(GetIntersection(planeOrigin, planeNormal, nearTL, nearTR), Color.yellow);
-        DrawDebug(GetIntersection(planeOrigin, planeNormal, nearBL, nearBR), Color.yellow);
-        DrawDebug(GetIntersection(planeOrigin, planeNormal, nearTL, nearBL), Color.yellow);
-        DrawDebug(GetIntersection(planeOrigin, planeNormal, nearTR, nearBR), Color.yellow);
+        var v1 = GetPlaneBase(planeNormal, 1);
+        var v2 = GetPlaneBase(planeNormal, 2);
+        DrawDebug(v1 * center.x + v2 * center.y, Color.blue);
+
+        Func<Vector2, Vector2, bool> less = (Vector2 a, Vector2 b) =>
+        {
+            if (a.x - center.x >= 0 && b.x - center.x < 0)
+                return true;
+            if (a.x - center.x < 0 && b.x - center.x >= 0)
+                return false;
+            if (a.x - center.x == 0 && b.x - center.x == 0)
+            {
+                if (a.y - center.y >= 0 || b.y - center.y >= 0)
+                    return a.y > b.y;
+                return b.y > a.y;
+            }
+
+            // compute the cross product of vectors (center -> a) x (center -> b)
+            float det = (a.x - center.x) * (b.y - center.y) - (b.x - center.x) * (a.y - center.y);
+            if (det < 0)
+                return true;
+            if (det > 0)
+                return false;
+
+            // points a and b are on the same line from the center
+            // check which point is closer to the center
+            float d1 = (a.x - center.x) * (a.x - center.x) + (a.y - center.y) * (a.y - center.y);
+            float d2 = (b.x - center.x) * (b.x - center.x) + (b.y - center.y) * (b.y - center.y);
+            return d1 > d2;
+        };
+
+        points2D.Sort((Vector2 a, Vector2 b) =>
+        {
+            return less(a, b) ? -1 : 1;
+        });
+
+        var points3D = new List<Vector3>();
+        points3D.Add(v1 * center.x + v2 * center.y);
+        var indices = new List<int>();
+        for (int i = 0; i < points2D.Count; i++)
+        {
+            var p3D = v1 * points2D[i].x + v2 * points2D[i].y;
+            points3D.Add(p3D);
+            indices.Add(0);
+            indices.Add(1 + (i + 1) % points2D.Count);
+            indices.Add(1 + i);
+            var p3Dnext = v1 * points2D[(i + 1) % points2D.Count].x + v2 * points2D[(i+1)%points2D.Count].y;
+            Debug.DrawLine(p3D, p3Dnext, Color.blue);
+        }
+
+        var plane = new Mesh();
+        plane.vertices = points3D.ToArray();
+        plane.triangles = indices.ToArray();
+        plane.UploadMeshData(false);
+        plane.RecalculateNormals();
+
+        Graphics.DrawMesh(plane, Matrix4x4.identity, materialExtended, gameObject.layer);
     }
 
     void OnPreRender()
@@ -357,13 +485,20 @@ public class EncinoWaves : MonoBehaviour
         var snappedPositionY = spacing * Mathf.FloorToInt(worldPosition.z / spacing);
         var matrix = Matrix4x4.TRS(new Vector3(snappedPositionX, 0.0f, snappedPositionY), Quaternion.identity, new Vector3(domainSize, 1, domainSize));
 
+        var snappedUVPosition = new Vector4(snappedPositionX - domainSize * 0.5f, 0, snappedPositionY - domainSize * 0.5f, 1) / domainSize;
+
         material.SetTexture("_DispTex", bufferDisplacement);
         material.SetTexture("_NormalMap", bufferGradientFold);
         material.SetFloat("_Choppiness", choppiness);
         material.SetFloat("_NormalTexelSize", 2.0f * domainSize / size);
-        material.SetVector("_SnappedWorldPosition", new Vector4(snappedPositionX, 0, snappedPositionY, 1) / domainSize);
+        material.SetVector("_SnappedWorldPosition", snappedUVPosition);
         Graphics.DrawMesh(mesh, matrix, material, gameObject.layer);
 
+        materialExtended.SetTexture("_DispTex", bufferDisplacement);
+        materialExtended.SetTexture("_NormalMap", bufferGradientFold);
+        materialExtended.SetFloat("_Choppiness", choppiness);
+        materialExtended.SetFloat("_InvDomainSize", 1.0f / domainSize);
+        materialExtended.SetFloat("_NormalTexelSize", 2.0f * domainSize / size);
         ComputeExtendedPlane();
     }
 
