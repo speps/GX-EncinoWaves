@@ -39,9 +39,10 @@ public class EncinoWaves : MonoBehaviour
 
     public Mesh mesh;
     public Material material;
-    public float domainSize = 100.0f;
-    public float choppiness = 0.03f;
+    public float domainSize = 200.0f;
+    public float choppiness = 2.0f;
     public bool wireframe;
+    public bool debug;
 
     RenderTexture CreateSpectrumUAV()
     {
@@ -253,7 +254,7 @@ public class EncinoWaves : MonoBehaviour
     {
         shaderCombine.SetInt("size", size);
         shaderCombine.SetFloat("domainSize", domainSize);
-        shaderCombine.SetFloat("cellSize", size / domainSize);
+        shaderCombine.SetFloat("invDomainSize", 1.0f / domainSize);
         shaderCombine.SetFloat("choppiness", choppiness);
 
         shaderCombine.SetTexture(0, "inputH", bufferHFinal);
@@ -264,6 +265,68 @@ public class EncinoWaves : MonoBehaviour
         shaderCombine.SetTexture(0, "outputGradientFold", bufferGradientFold);
 
         shaderCombine.Dispatch(0, size / 8, size / 8, 1);
+    }
+
+    Vector3? GetIntersection(Vector3 planeOrigin, Vector3 planeNormal, Vector3 p0, Vector3 p1)
+    {
+        float den = Vector3.Dot(planeNormal, p1 - p0);
+        if (Mathf.Abs(den) < float.Epsilon)
+        {
+            return null;
+        }
+        float u = Vector3.Dot(planeNormal, planeOrigin - p0) / den;
+        if (u < 0.0f || u > 1.0f)
+        {
+            return null;
+        }
+        return p0 + u * (p1 - p0);
+    }
+
+    void DrawDebug(Vector3? point, Color color)
+    {
+        if (point.HasValue)
+        {
+            float size = 0.4f;
+            Debug.DrawLine(point.Value - new Vector3(size, 0.0f, 0.0f), point.Value + new Vector3(size, 0.0f, 0.0f), color);
+            Debug.DrawLine(point.Value - new Vector3(0.0f, size, 0.0f), point.Value + new Vector3(0.0f, size, 0.0f), color);
+            Debug.DrawLine(point.Value - new Vector3(0.0f, 0.0f, size), point.Value + new Vector3(0.0f, 0.0f, size), color);
+        }
+    }
+
+    void ComputeExtendedPlane()
+    {
+        var camera = GetComponent<Camera>();
+        var nearTL = camera.ViewportToWorldPoint(new Vector3(1, 0, camera.nearClipPlane));
+        var nearTR = camera.ViewportToWorldPoint(new Vector3(1, 1, camera.nearClipPlane));
+        var nearBL = camera.ViewportToWorldPoint(new Vector3(0, 0, camera.nearClipPlane));
+        var nearBR = camera.ViewportToWorldPoint(new Vector3(0, 1, camera.nearClipPlane));
+        var farTL = camera.ViewportToWorldPoint(new Vector3(1, 0, camera.farClipPlane));
+        var farTR = camera.ViewportToWorldPoint(new Vector3(1, 1, camera.farClipPlane));
+        var farBL = camera.ViewportToWorldPoint(new Vector3(0, 0, camera.farClipPlane));
+        var farBR = camera.ViewportToWorldPoint(new Vector3(0, 1, camera.farClipPlane));
+
+        Debug.DrawLine(nearTL, farTL);
+        Debug.DrawLine(nearTR, farTR);
+        Debug.DrawLine(nearBL, farBL);
+        Debug.DrawLine(nearBR, farBR);
+
+        var planeOrigin = new Vector3(camera.transform.position.x, 0.0f, camera.transform.position.z);
+        var planeNormal = Vector3.up;
+
+        DrawDebug(GetIntersection(planeOrigin, planeNormal, nearTL, farTL), Color.yellow);
+        DrawDebug(GetIntersection(planeOrigin, planeNormal, nearTR, farTR), Color.yellow);
+        DrawDebug(GetIntersection(planeOrigin, planeNormal, nearBL, farBL), Color.yellow);
+        DrawDebug(GetIntersection(planeOrigin, planeNormal, nearBR, farBR), Color.yellow);
+
+        DrawDebug(GetIntersection(planeOrigin, planeNormal, farTL, farTR), Color.yellow);
+        DrawDebug(GetIntersection(planeOrigin, planeNormal, farBL, farBR), Color.yellow);
+        DrawDebug(GetIntersection(planeOrigin, planeNormal, farTL, farBL), Color.yellow);
+        DrawDebug(GetIntersection(planeOrigin, planeNormal, farTR, farBR), Color.yellow);
+
+        DrawDebug(GetIntersection(planeOrigin, planeNormal, nearTL, nearTR), Color.yellow);
+        DrawDebug(GetIntersection(planeOrigin, planeNormal, nearBL, nearBR), Color.yellow);
+        DrawDebug(GetIntersection(planeOrigin, planeNormal, nearTL, nearBL), Color.yellow);
+        DrawDebug(GetIntersection(planeOrigin, planeNormal, nearTR, nearBR), Color.yellow);
     }
 
     void OnPreRender()
@@ -300,10 +363,15 @@ public class EncinoWaves : MonoBehaviour
         material.SetFloat("_NormalTexelSize", 2.0f * domainSize / size);
         material.SetVector("_SnappedWorldPosition", new Vector4(snappedPositionX, 0, snappedPositionY, 1) / domainSize);
         Graphics.DrawMesh(mesh, matrix, material, gameObject.layer);
+
+        ComputeExtendedPlane();
     }
 
     void OnGUI()
     {
-        //GUI.DrawTexture(new Rect(0, 0, size*2, size*2), bufferGradientFold, ScaleMode.ScaleToFit, false);
+        if (debug)
+        {
+            GUI.DrawTexture(new Rect(0, 0, size * 2, size * 2), bufferDisplacement, ScaleMode.ScaleToFit, false);
+        }
     }
 }

@@ -15,7 +15,6 @@
 
 		CGPROGRAM
 		#pragma surface surf Standard addshadow fullforwardshadows vertex:vert tessellate:tess nolightmap
-		//#pragma surface surf Standard addshadow fullforwardshadows vertex:vert nolightmap
 		#pragma target 5.0
 		#pragma enable_d3d11_debug_symbols
 		#include "Tessellation.cginc"

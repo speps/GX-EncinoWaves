@@ -2,7 +2,7 @@
 
 int size;
 float domainSize;
-float cellSize;
+float invDomainSize;
 float choppiness;
 
 Texture2D<float> inputH;
@@ -30,7 +30,7 @@ float3 SampleDisplacement(int2 coord)
 {
 	coord.x += coord.x < 0 ? size : (coord.x >= size ? -size : 0);
 	coord.y += coord.y < 0 ? size : (coord.y >= size ? -size : 0);
-	return float3(inputDx[coord], inputH[coord], inputDy[coord]);
+	return float3(inputDx[coord], inputH[coord], inputDy[coord]) * float3(invDomainSize, 1.0f, invDomainSize);
 }
 
 [numthreads(TSIZE,TSIZE,1)]
@@ -66,12 +66,11 @@ void EncinoCombine(uint2 id : SV_DispatchThreadID, uint2 gid : SV_GroupThreadID)
 		float3 diffH = dispR - dispL;
 		float3 diffV = dispB - dispT;
 
-		float2 Dx = diffH.xz * choppiness * cellSize;
-		float2 Dy = diffV.xz * choppiness * cellSize;
+		float2 Dx = diffH.xz * choppiness * size;
+		float2 Dy = diffV.xz * choppiness * size;
 		float J = (1.0f + Dx.x) * (1.0f + Dy.y) - Dx.y * Dy.x;
 		float fold = max(1.0f - J, 0);
 
 		outputGradientFold[id] = float4(-diffH.y, -diffV.y, 0, fold);
-		//outputGradientFold[id] = float4(dispL, 1);
 	}
 }
