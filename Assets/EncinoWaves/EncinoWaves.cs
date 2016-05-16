@@ -37,7 +37,12 @@ public class EncinoWaves : MonoBehaviour
     private RenderTexture bufferDisplacement;
     private RenderTexture bufferGradientFold;
 
-    public Mesh mesh;
+    // Extended
+    private List<Vector3> extendedVertices = new List<Vector3>();
+    private List<int> extendedTriangles = new List<int>();
+
+    public Mesh mesh = new Mesh();
+    public Mesh meshExtended = new Mesh();
     public Material material;
     public Material materialExtended;
     public float domainSize = 200.0f;
@@ -101,7 +106,7 @@ public class EncinoWaves : MonoBehaviour
         // Butterfly
         {
             int log2Size = Mathf.RoundToInt(Mathf.Log(size, 2));
-            
+
             var butterflyData = new Vector2[size * log2Size];
 
             int offset = 1, numIterations = size >> 1;
@@ -153,7 +158,7 @@ public class EncinoWaves : MonoBehaviour
 
         // Mesh
         {
-            mesh = new Mesh();
+            mesh.Clear();
             mesh.name = "EncinoMesh";
 
             float spacing = 1.0f / meshSize;
@@ -262,7 +267,7 @@ public class EncinoWaves : MonoBehaviour
         materialCombine.SetTexture("inputH", bufferHFinal);
         materialCombine.SetTexture("inputDx", bufferDxFinal);
         materialCombine.SetTexture("inputDy", bufferDyFinal);
-        
+
         Graphics.SetRenderTarget(new RenderBuffer[] { bufferDisplacement.colorBuffer, bufferGradientFold.colorBuffer }, bufferDisplacement.depthBuffer);
         GL.PushMatrix();
         GL.LoadPixelMatrix(0, size, size, 0);
@@ -350,6 +355,33 @@ public class EncinoWaves : MonoBehaviour
         Debug.DrawLine(point - new Vector3(0.0f, 0.0f, size), point + new Vector3(0.0f, 0.0f, size), color);
     }
 
+    bool OrderedPointsCompare(Vector2 center, Vector2 a, Vector2 b)
+    {
+        if (a.x - center.x >= 0 && b.x - center.x < 0)
+            return true;
+        if (a.x - center.x < 0 && b.x - center.x >= 0)
+            return false;
+        if (a.x - center.x == 0 && b.x - center.x == 0)
+        {
+            if (a.y - center.y >= 0 || b.y - center.y >= 0)
+                return a.y > b.y;
+            return b.y > a.y;
+        }
+
+        // compute the cross product of vectors (center -> a) x (center -> b)
+        float det = (a.x - center.x) * (b.y - center.y) - (b.x - center.x) * (a.y - center.y);
+        if (det < 0)
+            return true;
+        if (det > 0)
+            return false;
+
+        // points a and b are on the same line from the center
+        // check which point is closer to the center
+        float d1 = (a.x - center.x) * (a.x - center.x) + (a.y - center.y) * (a.y - center.y);
+        float d2 = (b.x - center.x) * (b.x - center.x) + (b.y - center.y) * (b.y - center.y);
+        return d1 > d2;
+    }
+
     void ComputeExtendedPlane()
     {
         var camera = GetComponent<Camera>();
@@ -361,11 +393,6 @@ public class EncinoWaves : MonoBehaviour
         var farTR = camera.ViewportToWorldPoint(new Vector3(1, 1, camera.farClipPlane));
         var farBL = camera.ViewportToWorldPoint(new Vector3(0, 0, camera.farClipPlane));
         var farBR = camera.ViewportToWorldPoint(new Vector3(0, 1, camera.farClipPlane));
-
-        //Debug.DrawLine(nearTL, farTL);
-        //Debug.DrawLine(nearTR, farTR);
-        //Debug.DrawLine(nearBL, farBL);
-        //Debug.DrawLine(nearBR, farBR);
 
         var planeOrigin = new Vector3(camera.transform.position.x, 0.0f, camera.transform.position.z);
         var planeNormal = Vector3.up;
@@ -400,61 +427,27 @@ public class EncinoWaves : MonoBehaviour
 
         var v1 = GetPlaneBase(planeNormal, 1);
         var v2 = GetPlaneBase(planeNormal, 2);
-        DrawDebug(v1 * center.x + v2 * center.y, Color.blue);
 
-        Func<Vector2, Vector2, bool> less = (Vector2 a, Vector2 b) =>
-        {
-            if (a.x - center.x >= 0 && b.x - center.x < 0)
-                return true;
-            if (a.x - center.x < 0 && b.x - center.x >= 0)
-                return false;
-            if (a.x - center.x == 0 && b.x - center.x == 0)
-            {
-                if (a.y - center.y >= 0 || b.y - center.y >= 0)
-                    return a.y > b.y;
-                return b.y > a.y;
-            }
+        points2D.Sort((a, b) => OrderedPointsCompare(center, a, b) ? -1 : 1);
 
-            // compute the cross product of vectors (center -> a) x (center -> b)
-            float det = (a.x - center.x) * (b.y - center.y) - (b.x - center.x) * (a.y - center.y);
-            if (det < 0)
-                return true;
-            if (det > 0)
-                return false;
+        extendedVertices.Clear();
+        extendedTriangles.Clear();
 
-            // points a and b are on the same line from the center
-            // check which point is closer to the center
-            float d1 = (a.x - center.x) * (a.x - center.x) + (a.y - center.y) * (a.y - center.y);
-            float d2 = (b.x - center.x) * (b.x - center.x) + (b.y - center.y) * (b.y - center.y);
-            return d1 > d2;
-        };
-
-        points2D.Sort((Vector2 a, Vector2 b) =>
-        {
-            return less(a, b) ? -1 : 1;
-        });
-
-        var points3D = new List<Vector3>();
-        points3D.Add(v1 * center.x + v2 * center.y);
-        var indices = new List<int>();
+        extendedVertices.Add(v1 * center.x + v2 * center.y);
         for (int i = 0; i < points2D.Count; i++)
         {
-            var p3D = v1 * points2D[i].x + v2 * points2D[i].y;
-            points3D.Add(p3D);
-            indices.Add(0);
-            indices.Add(1 + (i + 1) % points2D.Count);
-            indices.Add(1 + i);
-            var p3Dnext = v1 * points2D[(i + 1) % points2D.Count].x + v2 * points2D[(i+1)%points2D.Count].y;
-            Debug.DrawLine(p3D, p3Dnext, Color.blue);
+            extendedVertices.Add(v1 * points2D[i].x + v2 * points2D[i].y);
+            extendedTriangles.Add(0);
+            extendedTriangles.Add(1 + (i + 1) % points2D.Count);
+            extendedTriangles.Add(1 + i);
         }
 
-        var plane = new Mesh();
-        plane.vertices = points3D.ToArray();
-        plane.triangles = indices.ToArray();
-        plane.UploadMeshData(false);
-        plane.RecalculateNormals();
+        meshExtended.Clear();
+        meshExtended.SetVertices(extendedVertices);
+        meshExtended.SetTriangles(extendedTriangles, 0);
+        meshExtended.RecalculateNormals();
 
-        Graphics.DrawMesh(plane, Matrix4x4.identity, materialExtended, gameObject.layer);
+        Graphics.DrawMesh(meshExtended, Matrix4x4.identity, materialExtended, gameObject.layer);
     }
 
     void OnPreRender()
@@ -490,13 +483,20 @@ public class EncinoWaves : MonoBehaviour
         material.SetTexture("_DispTex", bufferDisplacement);
         material.SetTexture("_NormalMap", bufferGradientFold);
         material.SetFloat("_Choppiness", choppiness);
+        material.SetVector("_ViewOrigin", transform.position);
+        material.SetFloat("_DomainSize", domainSize);
+        material.SetFloat("_InvDomainSize", 1.0f / domainSize);
         material.SetFloat("_NormalTexelSize", 2.0f * domainSize / size);
-        material.SetVector("_SnappedWorldPosition", snappedUVPosition);
+        material.SetVector("_SnappedWorldPosition", new Vector3(snappedPositionX, 0.0f, snappedPositionY));
+        material.SetVector("_SnappedUVPosition", snappedUVPosition);
         Graphics.DrawMesh(mesh, matrix, material, gameObject.layer);
 
         materialExtended.SetTexture("_DispTex", bufferDisplacement);
         materialExtended.SetTexture("_NormalMap", bufferGradientFold);
+        materialExtended.SetVector("_SnappedWorldPosition", new Vector3(snappedPositionX, 0.0f, snappedPositionY));
+        materialExtended.SetVector("_ViewOrigin", transform.position);
         materialExtended.SetFloat("_Choppiness", choppiness);
+        materialExtended.SetFloat("_DomainSize", domainSize);
         materialExtended.SetFloat("_InvDomainSize", 1.0f / domainSize);
         materialExtended.SetFloat("_NormalTexelSize", 2.0f * domainSize / size);
         ComputeExtendedPlane();

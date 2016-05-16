@@ -9,6 +9,7 @@
 	{
 		Tags { "RenderType"="Opaque" }
 		LOD 300
+		Cull Off
 
 		CGPROGRAM
 		#pragma surface surf Standard addshadow fullforwardshadows nolightmap
@@ -24,10 +25,20 @@
 		sampler2D _MainTex;
 		sampler2D _DispTex;
 		sampler2D _NormalMap;
+		float3 _SnappedWorldPosition;
+		float3 _ViewOrigin;
 		float _Choppiness;
+		float _DomainSize;
 		float _InvDomainSize;
 		float _NormalTexelSize;
 		float4 _Color;
+
+		float computeWeight(float3 worldPos)
+		{
+			float d = distance(worldPos, float3(_SnappedWorldPosition.x, _ViewOrigin.y, _SnappedWorldPosition.z)) - _DomainSize * 0.5f;
+			float w = saturate(d * _InvDomainSize * 1.0f);
+			return smoothstep(0.0f, 0.1f, w);
+		}
 
 		void surf(Input v, inout SurfaceOutputStandard o)
 		{
@@ -37,6 +48,11 @@
 			float4 c = tex2D(_MainTex, uvd) * _Color;
 			float4 grad = tex2D(_NormalMap, uvd);
 			float3 n = normalize(float3(grad.xy, _NormalTexelSize));
+			float w = computeWeight(v.worldPos);
+			if (w == 0.0f)
+			{
+				discard;
+			}
 			o.Albedo = c;
 			o.Normal = n;
 		}

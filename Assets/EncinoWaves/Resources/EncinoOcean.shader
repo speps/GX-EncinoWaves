@@ -36,18 +36,31 @@
 		}
 
 		sampler2D _DispTex;
-		float4 _SnappedWorldPosition;
+		float3 _SnappedWorldPosition;
+		float3 _SnappedUVPosition;
+		float3 _ViewOrigin;
+		float _DomainSize;
+		float _InvDomainSize;
 
 		struct Input
 		{
 			float2 uv_MainTex;
+			float3 worldPos;
 		};
+
+		float computeWeight(float3 worldPos)
+		{
+			float d = distance(worldPos, float3(_SnappedWorldPosition.x, _ViewOrigin.y, _SnappedWorldPosition.z));
+			float w = saturate(d * _InvDomainSize * 2.0f);
+			return smoothstep(0.0f, 0.1f, 1.0f - w);
+		}
 
 		void vert(inout appdata v)
 		{
-			float2 uv = _SnappedWorldPosition.xz + v.texcoord.xy;
+			float2 uv = _SnappedUVPosition.xz + v.texcoord.xy;
 			float3 displacement = tex2Dlod(_DispTex, float4(uv, 0, 0)).xyz;
-			v.vertex.xyz += displacement * float3(_Choppiness, _Displacement, _Choppiness);
+			float w = computeWeight(mul(_Object2World, v.vertex));
+			v.vertex.xyz += displacement * float3(_Choppiness, _Displacement * w, _Choppiness);
 		}
 
 		sampler2D _MainTex;
@@ -57,10 +70,15 @@
 
 		void surf(Input v, inout SurfaceOutputStandard o)
 		{
-			float2 uv = _SnappedWorldPosition.xz + v.uv_MainTex;
+			float2 uv = _SnappedUVPosition.xz + v.uv_MainTex;
 			float4 c = tex2D(_MainTex, uv) * _Color;
 			float4 grad = tex2D(_NormalMap, uv);
 			float3 n = normalize(float3(grad.xy, _NormalTexelSize));
+			float w = computeWeight(v.worldPos);
+			if (w == 0.0f)
+			{
+				discard;
+			}
 			o.Albedo = c;
 			o.Normal = n;
 		}
