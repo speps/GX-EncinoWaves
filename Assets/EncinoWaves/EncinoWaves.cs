@@ -41,8 +41,8 @@ public class EncinoWaves : MonoBehaviour
     private List<Vector3> extendedVertices = new List<Vector3>();
     private List<int> extendedTriangles = new List<int>();
 
-    public Mesh mesh = new Mesh();
-    public Mesh meshExtended = new Mesh();
+    public Mesh mesh;
+    public Mesh meshExtended;
     public Material material;
     public Material materialExtended;
     public float domainSize = 200.0f;
@@ -158,7 +158,7 @@ public class EncinoWaves : MonoBehaviour
 
         // Mesh
         {
-            mesh.Clear();
+            mesh = new Mesh();
             mesh.name = "EncinoMesh";
 
             float spacing = 1.0f / meshSize;
@@ -442,6 +442,11 @@ public class EncinoWaves : MonoBehaviour
             extendedTriangles.Add(1 + i);
         }
 
+        if (meshExtended == null)
+        {
+            meshExtended = new Mesh();
+            meshExtended.name = "EncinoMeshExtended";
+        }
         meshExtended.Clear();
         meshExtended.SetVertices(extendedVertices);
         meshExtended.SetTriangles(extendedTriangles, 0);
