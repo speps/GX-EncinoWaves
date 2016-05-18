@@ -12,9 +12,10 @@
 		Cull Off
 
 		CGPROGRAM
-		#pragma surface surf Standard addshadow fullforwardshadows nolightmap
+		#pragma surface surf SimpleSpecular addshadow fullforwardshadows nolightmap
 		#pragma target 5.0
 		#pragma enable_d3d11_debug_symbols
+		#include "EncinoOcean.cginc"
 
 		struct Input
 		{
@@ -40,7 +41,7 @@
 			return smoothstep(0.0f, 0.1f, w);
 		}
 
-		void surf(Input v, inout SurfaceOutputStandard o)
+		void surf(Input v, inout SurfaceOutput o)
 		{
 			float2 uv = v.worldPos.xz * _InvDomainSize;
 			float4 d = tex2D(_DispTex, uv);

@@ -2,21 +2,22 @@
 {
 	Properties
 	{
-		_MainTex ("Base (RGB)", 2D) = "white" {}
-		_Color ("Color", color) = (1,1,1,0)
-		_Displacement ("Displacement", Range(0, 1.0)) = 0.3
-		_EdgeLength ("Tessellation", Range(1,128)) = 4
+		_MainTex("Base (RGB)", 2D) = "white" {}
+		_Color("Color", color) = (1,1,1,0)
+		_Displacement("Displacement", Range(0, 1.0)) = 0.3
+		_EdgeLength("Tessellation", Range(1,128)) = 4
 	}
 	SubShader
 	{
-		Tags { "RenderType"="Opaque" }
+		Tags { "RenderType" = "Opaque" }
 		LOD 300
 
 		CGPROGRAM
-		#pragma surface surf Standard addshadow fullforwardshadows vertex:vert tessellate:tess nolightmap
+		#pragma surface surf SimpleSpecular addshadow fullforwardshadows vertex:vert tessellate:tess nolightmap
 		#pragma target 5.0
 		#pragma enable_d3d11_debug_symbols
 		#include "Tessellation.cginc"
+		#include "EncinoOcean.cginc"
 
 		struct appdata
 		{
@@ -68,7 +69,7 @@
 		float _NormalTexelSize;
 		float4 _Color;
 
-		void surf(Input v, inout SurfaceOutputStandard o)
+		void surf(Input v, inout SurfaceOutput o)
 		{
 			float2 uv = _SnappedUVPosition.xz + v.uv_MainTex;
 			float4 c = tex2D(_MainTex, uv) * _Color;
