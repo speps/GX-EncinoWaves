@@ -3,9 +3,9 @@
 	Properties
 	{
 		_MainTex("Base (RGB)", 2D) = "white" {}
-		_Color("Color", color) = (1,1,1,0)
 		_Displacement("Displacement", Range(0, 1.0)) = 0.3
 		_EdgeLength("Tessellation", Range(1,128)) = 4
+		_Cube("Reflection Cubemap", Cube) = "_Skybox" {}
 	}
 	SubShader
 	{
@@ -13,7 +13,7 @@
 		LOD 300
 
 		CGPROGRAM
-		#pragma surface surf SimpleSpecular addshadow fullforwardshadows vertex:vert tessellate:tess nolightmap
+		#pragma surface surf Ocean addshadow fullforwardshadows vertex:vert tessellate:tess nolightmap
 		#pragma target 5.0
 		#pragma enable_d3d11_debug_symbols
 		#include "Tessellation.cginc"
@@ -47,6 +47,8 @@
 		{
 			float2 uv_MainTex;
 			float3 worldPos;
+			float3 worldRefl;
+			INTERNAL_DATA
 		};
 
 		float computeWeight(float3 worldPos)
@@ -68,6 +70,8 @@
 		sampler2D _NormalMap;
 		float _NormalTexelSize;
 		float4 _Color;
+		float4 _ColorFoam;
+		float _Specular;
 
 		void surf(Input v, inout SurfaceOutput o)
 		{
@@ -81,7 +85,9 @@
 				discard;
 			}
 			o.Albedo = c;
+			o.Alpha = grad.w;
 			o.Normal = n;
+			o.Specular = _Specular;
 		}
 		ENDCG
 	}

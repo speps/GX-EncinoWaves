@@ -3,7 +3,7 @@
 	Properties
 	{
 		_MainTex ("Base (RGB)", 2D) = "white" {}
-		_Color ("Color", color) = (1,1,1,0)
+		_Cube("Reflection Cubemap", Cube) = "_Skybox" {}
 	}
 	SubShader
 	{
@@ -12,7 +12,7 @@
 		Cull Off
 
 		CGPROGRAM
-		#pragma surface surf SimpleSpecular addshadow fullforwardshadows nolightmap
+		#pragma surface surf Ocean addshadow fullforwardshadows nolightmap
 		#pragma target 5.0
 		#pragma enable_d3d11_debug_symbols
 		#include "EncinoOcean.cginc"
@@ -33,6 +33,8 @@
 		float _InvDomainSize;
 		float _NormalTexelSize;
 		float4 _Color;
+		float4 _ColorFoam;
+		float _Specular;
 
 		float computeWeight(float3 worldPos)
 		{
@@ -55,7 +57,9 @@
 				discard;
 			}
 			o.Albedo = c;
+			o.Alpha = grad.w;
 			o.Normal = n;
+			o.Specular = _Specular;
 		}
 		ENDCG
 	}

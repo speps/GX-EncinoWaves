@@ -49,7 +49,7 @@
 					float2 Dx = diffH.xz * choppiness * size;
 					float2 Dy = diffV.xz * choppiness * size;
 					float J = (1.0f + Dx.x) * (1.0f + Dy.y) - Dx.y * Dy.x;
-					float fold = max(1.0f - J, 0);
+					float fold = max(1.0f - saturate(J), 0);
 
 					outGradientFold = float4(-diffH.y, -diffV.y, 0, fold);
 				}

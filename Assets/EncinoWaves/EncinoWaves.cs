@@ -17,7 +17,7 @@ public class EncinoWaves : MonoBehaviour
 
     private Material materialCombine;
 
-    private int size = 256;
+    private int size = 512;
     private int meshSize = 32;
     // Spectrum
     private RenderTexture bufferSpectrumH0;
@@ -47,6 +47,8 @@ public class EncinoWaves : MonoBehaviour
     public Material materialExtended;
     public float domainSize = 200.0f;
     public float choppiness = 2.0f;
+    public Color colorMain = Color.blue;
+    public float specular = 8.0f;
     public bool wireframe;
     public bool debug;
 
@@ -154,6 +156,14 @@ public class EncinoWaves : MonoBehaviour
             texButterfly = new Texture2D(size, log2Size, TextureFormat.RGHalf, false);
             texButterfly.LoadRawTextureData(butterflyBytes);
             texButterfly.Apply(false, true);
+        }
+
+        // Kernel offset
+        {
+            int baseLog2Size = Mathf.RoundToInt(Mathf.Log(256, 2));
+            int log2Size = Mathf.RoundToInt(Mathf.Log(size, 2));
+            kernelFFTX = (log2Size - baseLog2Size) * 2;
+            kernelFFTY = kernelFFTX + 1;
         }
 
         // Mesh
@@ -475,6 +485,23 @@ public class EncinoWaves : MonoBehaviour
         Combine();
     }
 
+    void SetMaterial(Material m, float snappedPositionX, float snappedPositionY)
+    {
+        var snappedUVPosition = new Vector4(snappedPositionX - domainSize * 0.5f, 0, snappedPositionY - domainSize * 0.5f, 1) / domainSize;
+
+        m.SetTexture("_DispTex", bufferDisplacement);
+        m.SetTexture("_NormalMap", bufferGradientFold);
+        m.SetColor("_Color", colorMain);
+        m.SetFloat("_Choppiness", choppiness);
+        m.SetVector("_ViewOrigin", transform.position);
+        m.SetFloat("_DomainSize", domainSize);
+        m.SetFloat("_InvDomainSize", 1.0f / domainSize);
+        m.SetFloat("_NormalTexelSize", 2.0f * domainSize / size);
+        m.SetVector("_SnappedWorldPosition", new Vector3(snappedPositionX, 0.0f, snappedPositionY));
+        m.SetVector("_SnappedUVPosition", snappedUVPosition);
+        m.SetFloat("_Specular", specular);
+    }
+
     void LateUpdate()
     {
         var worldPosition = transform.position;
@@ -483,27 +510,10 @@ public class EncinoWaves : MonoBehaviour
         var snappedPositionY = spacing * Mathf.FloorToInt(worldPosition.z / spacing);
         var matrix = Matrix4x4.TRS(new Vector3(snappedPositionX, 0.0f, snappedPositionY), Quaternion.identity, new Vector3(domainSize, 1, domainSize));
 
-        var snappedUVPosition = new Vector4(snappedPositionX - domainSize * 0.5f, 0, snappedPositionY - domainSize * 0.5f, 1) / domainSize;
-
-        material.SetTexture("_DispTex", bufferDisplacement);
-        material.SetTexture("_NormalMap", bufferGradientFold);
-        material.SetFloat("_Choppiness", choppiness);
-        material.SetVector("_ViewOrigin", transform.position);
-        material.SetFloat("_DomainSize", domainSize);
-        material.SetFloat("_InvDomainSize", 1.0f / domainSize);
-        material.SetFloat("_NormalTexelSize", 2.0f * domainSize / size);
-        material.SetVector("_SnappedWorldPosition", new Vector3(snappedPositionX, 0.0f, snappedPositionY));
-        material.SetVector("_SnappedUVPosition", snappedUVPosition);
+        SetMaterial(material, snappedPositionX, snappedPositionY);
         Graphics.DrawMesh(mesh, matrix, material, gameObject.layer);
 
-        materialExtended.SetTexture("_DispTex", bufferDisplacement);
-        materialExtended.SetTexture("_NormalMap", bufferGradientFold);
-        materialExtended.SetVector("_SnappedWorldPosition", new Vector3(snappedPositionX, 0.0f, snappedPositionY));
-        materialExtended.SetVector("_ViewOrigin", transform.position);
-        materialExtended.SetFloat("_Choppiness", choppiness);
-        materialExtended.SetFloat("_DomainSize", domainSize);
-        materialExtended.SetFloat("_InvDomainSize", 1.0f / domainSize);
-        materialExtended.SetFloat("_NormalTexelSize", 2.0f * domainSize / size);
+        SetMaterial(materialExtended, snappedPositionX, snappedPositionY);
         ComputeExtendedPlane();
     }
 
@@ -511,7 +521,7 @@ public class EncinoWaves : MonoBehaviour
     {
         if (debug)
         {
-            GUI.DrawTexture(new Rect(0, 0, size * 2, size * 2), bufferDisplacement, ScaleMode.ScaleToFit, false);
+            GUI.DrawTexture(new Rect(0, 0, size, size), bufferHFinal, ScaleMode.ScaleToFit, false);
         }
     }
 }
