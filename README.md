@@ -24,6 +24,8 @@ Please add issues if you have any suggestions.
 
 ## Results
 
+Click image for video.
+
 [![...](http://i.imgur.com/Q8eAwhm.png)](http://i.imgur.com/lmawGHU.gifv)
 
 ### License 
