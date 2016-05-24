@@ -24,7 +24,7 @@ Please add issues if you have any suggestions.
 
 ## Results
 
-![...](http://i.imgur.com/lmawGHU.gifv)
+![...](http://i.imgur.com/lmawGHU.gif)
 
 ### License 
 
