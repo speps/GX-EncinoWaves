@@ -5,7 +5,8 @@ samplerCUBE _Cube;
 half4 LightingOcean(SurfaceOutput s, half3 lightDir, half3 viewDir, half atten)
 {
 	half3 h = normalize(lightDir + viewDir);
-	float nh = max(0, dot(s.Normal, h));
+	float nh = dot(s.Normal, h);
+	nh *= nh;
 	float spec = pow(nh, s.Specular);
 
 	float3 upwelling = float3(0, 0.2, 0.3);
@@ -33,7 +34,7 @@ half4 LightingOcean(SurfaceOutput s, half3 lightDir, half3 viewDir, half atten)
 	float3 sky = texCUBE(_Cube, nN);
 	float3 sun = texCUBE(_Cube, lightDir);
 
-	float3 Ci = reflectivity * sky + (1-reflectivity) * upwelling + spec * sun;
+	float3 Ci = reflectivity * sky + (1-reflectivity) * upwelling + spec * reflectivity * sun;
 
 	return float4(Ci * atten, 1);
 }

@@ -12,7 +12,7 @@
 		Cull Off
 
 		CGPROGRAM
-		#pragma surface surf Ocean addshadow fullforwardshadows nolightmap
+		#pragma surface surf Standard nolightmap
 		#pragma target 5.0
 		#pragma enable_d3d11_debug_symbols
 		#include "EncinoOcean.cginc"
@@ -21,6 +21,8 @@
 		{
 			float2 uv_MainTex;
 			float3 worldPos;
+			float3 worldRefl;
+			INTERNAL_DATA
 		};
 
 		sampler2D _MainTex;
@@ -34,7 +36,8 @@
 		float _NormalTexelSize;
 		float4 _Color;
 		float4 _ColorFoam;
-		float _Specular;
+		float _Metal;
+		float _Smoothness;
 
 		float computeWeight(float3 worldPos)
 		{
@@ -43,13 +46,14 @@
 			return smoothstep(0.0f, 0.1f, w);
 		}
 
-		void surf(Input v, inout SurfaceOutput o)
+		void surf(Input v, inout SurfaceOutputStandard o)
 		{
 			float2 uv = v.worldPos.xz * _InvDomainSize;
 			float4 d = tex2D(_DispTex, uv);
 			float2 uvd = v.worldPos.xz * _InvDomainSize + d.xz * -_Choppiness;
-			float4 c = tex2D(_MainTex, uvd) * _Color;
 			float4 grad = tex2D(_NormalMap, uvd);
+			float foam = grad.w * grad.w;
+			float4 c = tex2D(_MainTex, uvd) * lerp(_Color, _ColorFoam, foam);
 			float3 n = normalize(float3(grad.xy, _NormalTexelSize));
 			float w = computeWeight(v.worldPos);
 			if (w == 0.0f)
@@ -57,9 +61,8 @@
 				discard;
 			}
 			o.Albedo = c;
-			o.Alpha = grad.w;
 			o.Normal = n;
-			o.Specular = _Specular;
+			o.Smoothness = lerp(_Smoothness, 0, foam);
 		}
 		ENDCG
 	}

@@ -48,7 +48,9 @@ public class EncinoWaves : MonoBehaviour
     public float domainSize = 200.0f;
     public float choppiness = 2.0f;
     public Color colorMain = Color.blue;
-    public float specular = 8.0f;
+    public Color colorFoam = Color.white;
+    public float metal = 1.0f;
+    public float smoothness = 1.0f;
     public bool wireframe;
     public bool debug;
 
@@ -73,7 +75,7 @@ public class EncinoWaves : MonoBehaviour
         var texture = new RenderTexture(size, size, 0, RenderTextureFormat.ARGBFloat);
         texture.enableRandomWrite = true;
         texture.useMipMap = true;
-        texture.generateMips = true;
+        texture.autoGenerateMips = true;
         texture.filterMode = FilterMode.Bilinear;
         texture.wrapMode = TextureWrapMode.Repeat;
         texture.Create();
@@ -492,6 +494,7 @@ public class EncinoWaves : MonoBehaviour
         m.SetTexture("_DispTex", bufferDisplacement);
         m.SetTexture("_NormalMap", bufferGradientFold);
         m.SetColor("_Color", colorMain);
+        m.SetColor("_ColorFoam", colorFoam);
         m.SetFloat("_Choppiness", choppiness);
         m.SetVector("_ViewOrigin", transform.position);
         m.SetFloat("_DomainSize", domainSize);
@@ -499,7 +502,8 @@ public class EncinoWaves : MonoBehaviour
         m.SetFloat("_NormalTexelSize", 2.0f * domainSize / size);
         m.SetVector("_SnappedWorldPosition", new Vector3(snappedPositionX, 0.0f, snappedPositionY));
         m.SetVector("_SnappedUVPosition", snappedUVPosition);
-        m.SetFloat("_Specular", specular);
+        m.SetFloat("_Metal", metal);
+        m.SetFloat("_Smoothness", smoothness);
     }
 
     void LateUpdate()
