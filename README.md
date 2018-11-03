@@ -24,7 +24,7 @@ Please add issues if you have any suggestions.
 
 ## Results
 
-[EncinoWaves Demo](https://i.imgur.com/6wiSy7v.gif)
+![Preview](https://raw.github.com/speps/GX-EncinoWaves/master/preview.gif)
 
 ### License 
 
