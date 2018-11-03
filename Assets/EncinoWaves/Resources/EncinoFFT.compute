@@ -2,6 +2,8 @@
 #pragma kernel EncinoFFT SIZE=256 PASSES=8 CHANNEL=y TX=1 TY=256 FINAL=1
 #pragma kernel EncinoFFT SIZE=512 PASSES=9 CHANNEL=x TX=512 TY=1 FINAL=0
 #pragma kernel EncinoFFT SIZE=512 PASSES=9 CHANNEL=y TX=1 TY=512 FINAL=1
+#pragma kernel EncinoFFT SIZE=1024 PASSES=10 CHANNEL=x TX=1024 TY=1 FINAL=0
+#pragma kernel EncinoFFT SIZE=1024 PASSES=10 CHANNEL=y TX=1 TY=1024 FINAL=1
 
 Texture2D<float2> input;
 Texture2D<float2> inputButterfly;
