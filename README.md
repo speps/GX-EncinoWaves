@@ -24,9 +24,7 @@ Please add issues if you have any suggestions.
 
 ## Results
 
-Click image for video.
-
-[![...](http://i.imgur.com/Q8eAwhm.png)](http://i.imgur.com/lmawGHU.gifv)
+[EncinoWaves Demo](https://i.imgur.com/6wiSy7v.gifv)
 
 ### License 
 

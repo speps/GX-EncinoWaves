@@ -480,7 +480,13 @@ public class EncinoWaves : MonoBehaviour
     void Update()
     {
         SpectrumInit();
-        SpectrumUpdate(Time.time);
+        float time = Time.time;
+        var timeSource = GetComponent<ITimeSource>();
+        if (timeSource != null)
+        {
+            time = timeSource.GetTime();
+        }
+        SpectrumUpdate(time);
         FFT(bufferSpectrumH, bufferHFinal);
         FFT(bufferSpectrumDx, bufferDxFinal);
         FFT(bufferSpectrumDy, bufferDyFinal);
