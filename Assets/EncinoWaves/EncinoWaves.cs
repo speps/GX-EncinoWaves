@@ -17,7 +17,7 @@ public class EncinoWaves : MonoBehaviour
 
     private Material materialCombine;
 
-    private int size = 512;
+    private int size = 512; // if you change this, check that EncinoFFT.compute contains a supported size
     private int meshSize = 32;
     // Spectrum
     private RenderTexture bufferSpectrumH0;
