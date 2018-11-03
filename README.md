@@ -24,7 +24,7 @@ Please add issues if you have any suggestions.
 
 ## Results
 
-[EncinoWaves Demo](https://i.imgur.com/6wiSy7v.gifv)
+[EncinoWaves Demo](https://i.imgur.com/6wiSy7v.gif)
 
 ### License 
 
